@@ -28,6 +28,7 @@ def main():
 
     m = AskLong( 0, "Input Count Number or Ignore..." )
 
+    MakeDword(ea)
     h = Dword(ea)
     off = 0
     while h != 0:
@@ -42,6 +43,7 @@ def main():
             if rc != 0: print '[-] ', rc
         else:
             print '%08X not found...' % h
+        MakeDword(ea)
         h = Dword(ea)
         off += 4
 #-------------------------------------------------------------------------------
