@@ -6,12 +6,15 @@ calc_api_name_hash.py
 
 TODO
 """
-__author__  = 'Binjo'
-__version__ = '0.2'
-__date__    = '2008-10-28 15:25:46'
+__author__      = 'Binjo'
+__version__     = '0.3'
+__date__        = '2008-10-28 15:25:46'
+__description__ = "Calculate api names' hash or Search name via hash."
 
-import sys
+import os, sys
 import pefile
+import optparse
+import sqlite3
 
 FILEZ       = {
     'kernel32'  :   'c:/windows/system32/kernel32.dll',
@@ -20,6 +23,16 @@ FILEZ       = {
     'user32'    :   'c:/windows/system32/user32.dll',
     'urlmon'    :   'c:/windows/system32/urlmon.dll',
     }
+
+db = sqlite3.connect( 'api_name_hash.db' )
+db.isolation_level = None       # auto commit
+cr = db.cursor()
+if ( (not os.path.isfile('api_name_hash.db')) or
+     os.path.getsize('api_name_hash.db') == 0 ):
+    # api_hash : XXXXXXXX
+    # api_name : name-file-offset
+    cr.execute("""
+        create table hashes (api_hash text, api_name text)""")
 
 def calc_hash(src, off):
     """
@@ -46,23 +59,32 @@ loc_108A:
 def main():
     """TODO
     """
-    if len(sys.argv) < 5:
-        print '%s -[s|f] src -o off' % sys.argv[0]
+    opt = optparse.OptionParser( usage='usage: %prog [options]\n' + __description__, version='%prog ' + __version__)
+    opt.add_option( '-s', '--search', help='hash string to search' )
+    opt.add_option( '-o', '--offset', help='offset for the calculation' )
+    opt.add_option( '-f', '--file',   help='file name' )
+
+    (opts, args) = opt.parse_args()
+
+    if len(args) != 0:
+        opt.print_help()
         print '  -f is as follows:'
         for k, v in FILEZ.iteritems():
             print '    %s -> %s' % ( k, v )
         exit(-1)
 
-    keyname  = None
-    searchee = None
-    for i in xrange(len(sys.argv)):
-        if sys.argv[i] == '-f':
-            keyname  = sys.argv[i+1]
-        elif sys.argv[i] == '-s':
-            searchee = int(sys.argv[i+1], 16)
-        elif sys.argv[i] == '-o':
-            offset   = sys.argv[i+1]
+    keyname  = opts.file
+    searchee = opts.search
+    offset   = opts.offset
 
+    # for search
+    if searchee is not None:
+        cr.execute("select api_name from hashes where api_hash=?",
+                   ("%08X" % int( searchee, 16 ), ))
+        print "%s, %08X" % (cr.fetchone()[0], int( searchee, 16 ))
+        return
+
+    # insert table
     print 'offset %s, %s' % ( offset, keyname )
 
     def filter_rule(x):
@@ -85,12 +107,11 @@ def main():
 
         for s in pe.DIRECTORY_ENTRY_EXPORT.symbols:
             v, n = calc_hash( s.name, offset )
-            if searchee is not None:
-                if v == searchee:
-                    print '%08X, %s' % (v, n)
-                    break
-            else:
-                print '%08X, %s' % ( v, n )
+            print '%08X, %s' % ( v, n )
+            if v == -1: continue
+            cr.execute("""
+                insert into hashes
+                values ( ?, ? )""", ("%08X" % v, "%s-%s-%s" % (n, keyname, offset)) )
 #-------------------------------------------------------------------------------
 if __name__ == '__main__':
     main()
