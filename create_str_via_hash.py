@@ -3,15 +3,42 @@
 # create_str_via_hash.py
 # Binjo @ 2009-04-05 21:47:23
 #-------------------------------------------------------------------------------
+import sqlite3
 from idc import *
 
-def get_name_via_hash(arr, hsh):
-    """TODO
+class HashToName(object):
+    """wrapper of hash <-> name
     """
-    for l in arr[1:]:
-        h, n = l.strip('\n').split(',')
-        if hsh == int(h, 16): return n
-    return ''
+
+    def __init__(self, dbf):
+        """
+
+        Arguments:
+        - `dbf`:
+        """
+        self._dbf  = dbf
+        self._db   = None
+        self._conn = None
+
+        if os.path.isfile(dbf):
+            self._db = sqlite3.connect(dbf)
+            self._conn = self._db.cursor()
+
+    def h2n(self, hsh):
+        """hash <-> name
+
+        Arguments:
+        - `self`:
+        - `hsh`:
+        """
+        if hsh != '' and self._conn is not None:
+            self._conn.execute("select api_name from hashes where api_hash=?",
+                               (hsh,))
+            row = self._conn.fetchone()
+            if row is not None:
+                return row[0].split('-')
+
+        return (None, None, None)
 
 def main():
     """TODO
@@ -21,10 +48,8 @@ def main():
     id = GetStrucIdByName(n)
     ea = here()
 
-    f = AskFile( 0, '*.txt', 'hash to name' )
-    fh = open(f, 'r')
-    c = fh.readlines()
-    fh.close()
+    dbf = AskFile( 0, '*.db', 'Please select the hash database' )
+    dbh = HashToName(dbf)
 
     m = AskLong( 0, "Input Count Number or Ignore..." )
 
@@ -36,13 +61,13 @@ def main():
             if ( off + 4 ) / 4 > m: break
         ea += 4
         if ea >= MaxEA(): break
-        n = get_name_via_hash( c, h )
-        if n != '':
-            print '%08X, %s' % (h, n)
-            rc = AddStrucMember( id, n.strip(' '), off, FF_DWRD, -1, 4 )
+        n, fname, offset = dbh.h2n( "%08X" % h )
+        if n is not None:
+            print "[+] %08X: %s, offset: %s, %08X <-> %s" % (ea, fname, offset, h, n)
+            rc = AddStrucMember( id, str(n), -1, FF_DWRD, -1, 4 )
             if rc != 0: print '[-] ', rc
         else:
-            print '%08X not found...' % h
+            print '%08X: %08X not found...' % (ea, h)
         MakeDword(ea)
         h = Dword(ea)
         off += 4
