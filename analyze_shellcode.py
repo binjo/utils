@@ -107,9 +107,16 @@ def main():
     if len(xstruct.keys()) == 0:
         print "[+] Hash probably exist elsewhere... tring bruteforce way..."
         ea, xkey = MinEA(), 0
-        while ea < jmp_ea: # FIXME use MaxEA() instead?
+        while ea < MaxEA():
 
             if not isCode( GetFlags(ea) ):
+                # try to search Dword(ea)
+                hsh = Dword(ea)
+                api, fname, offset = dbh.h2n( "%08X" % hsh )
+                if api is not None:
+                    print "[+] %08X: %s, offset: %s, %08X <-> %s" % (ea, fname, offset, hsh, api)
+                    xstruct[xkey], xkey = api, xkey + 4
+
                 ea = NextAddr(ea)
                 continue
 
@@ -149,7 +156,7 @@ def main():
                 else:
                     print "[-] %08X: %08X not found..." % (ea, hsh)
 
-            ea = NextHead(ea, jmp_ea)
+            ea += ItemSize(ea)  # this must be code
 
     key_list = xstruct.keys()
     if len(key_list) == 0:
@@ -210,7 +217,7 @@ def main():
             except Exception, e:
                 print "[-] %08X: shit happen... %08X, %s" % (ea, xkey, opnd)
 
-        ea = NextHead(ea, MaxEA())
+        ea += ItemSize(ea)      # this must be code
 
     print "[+] Done..."
 #-------------------------------------------------------------------------------
