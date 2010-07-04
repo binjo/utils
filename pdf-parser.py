@@ -621,30 +621,61 @@ def ASCIIHexDecode(data):
     return binascii.unhexlify(''.join([c for c in data if c not in ' \t\n\r']).rstrip('>'))
 
 def FlateDecode(data):
-    return zlib.decompress(data)
+    # copy from http://code.google.com/p/pdfminerr/source/browse/trunk/pdfminer/pdfminer/pdftypes.py
+    buf = data
+    # some FlateDecode streams have garbage (newlines, etc) appended to the
+    # end.  remove chars from the end to try and decompress the buffer
+    while 8 <= len(buf):
+        try:
+            # will get errors if the document is encrypted.
+            dco = zlib.decompressobj()
+            return dco.decompress(buf)
+        except zlib.error:
+            buf = buf[:-1]
+    raise Exception, "zlib.error while decompressing data"
+#    return zlib.decompress(data)
 
 def RunLengthDecode(data):
-    f = cStringIO.StringIO(data)
-    decompressed = ''
-    runLength = ord(f.read(1))
-    while runLength:
-        if runLength < 128:
-            decompressed += f.read(runLength + 1)
-        if runLength > 128:
-            decompressed += f.read(1) * (257 - runLength)
-        if runLength == 128:
+    # copy from http://code.google.com/p/pdfminerr/source/browse/trunk/pdfminer/pdfminer/runlength.py
+    decoded = []
+    i=0
+    while i < len(data):
+        length = ord(data[i])
+        if length == 128:
             break
-        runLength = ord(f.read(1))
-#    return sub(r'(\d+)(\D)', lambda m: m.group(2) * int(m.group(1)), data)
-    return decompressed
+        if length >= 0 and length < 128:
+            run = data[i+1:(i+1)+(length+1)]
+            decoded.append(run)
+            i = (i+1) + (length+1)
+        if length > 128:
+            run = data[i+1]*(257-length)
+            decoded.append(run)
+            i = (i+1) + 1
+    return ''.join(decoded)
+#     f = cStringIO.StringIO(data)
+#     decompressed = ''
+#     runLength = ord(f.read(1))
+#     while True:
+#         if runLength == 0:
+#             runLength = ord(f.read(1))
+#             continue
+#         if runLength < 128:
+#             decompressed += f.read(runLength + 1)
+#         if runLength > 128:
+#             decompressed += f.read(1) * (257 - runLength)
+#         if runLength == 128:
+#             break
+#         runLength = ord(f.read(1))
+# #    return sub(r'(\d+)(\D)', lambda m: m.group(2) * int(m.group(1)), data)
+#     return decompressed
 
 #### LZW code sourced from pdfminer
 # Copyright (c) 2004-2009 Yusuke Shinyama <yusuke at cs dot nyu dot edu>
 #
-# Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated 
-# documentation files (the "Software"), to deal in the Software without restriction, including without limitation 
-# the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, 
-# and to permit persons to whom the Software is furnished to do so, subject to the following conditions: 
+# Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+# documentation files (the "Software"), to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
+# and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
 class LZWDecoder(object):
     def __init__(self, fp):
