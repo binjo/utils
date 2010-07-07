@@ -904,7 +904,9 @@ def Main():
             names = dicObjectTypes.keys()
             names.sort()
             for key in names:
-                print ' %s %d: %s' % (key, len(dicObjectTypes[key]), ', '.join(map(lambda x: '%d' % x, dicObjectTypes[key])))
+                print ' %s %d: %s' % (ConditionalCanonicalize(key, options.nocanonicalizedoutput),
+                                      len(dicObjectTypes[key]),
+                                      ', '.join(map(lambda x: '%d' % x, dicObjectTypes[key])))
 
 def TestPythonVersion(enforceMaximumVersion=False, enforceMinimumVersion=False):
     if sys.version_info[0:3] > __maximum_python_version__:
