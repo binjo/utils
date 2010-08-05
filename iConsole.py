@@ -1,13 +1,23 @@
-# -*- coding : gb2312 -*-
-# iConsole.py
-# Binjo @ 2008-03-17 11:15:44
-#-------------------------------------------------------------------------------
+#!/usr/bin/env python
+# -*- coding : utf-8 -*-
+
+"""
+iConsole.py
+
+
+"""
+__author__  = 'Binjo'
+__version__ = '0.2'
+__date__    = '2008-03-17 11:15:44'
+
 import os, sys
 import subprocess
 import md5
-import vmrun
 import pefile, peutils
 import ctypes
+import pprint as pp
+from vmrun import Vmrun
+from cmd   import *
 
 TARGET   = ''
 # default
@@ -18,323 +28,355 @@ SIG_FILE = r'D:\Tools\avtools\peid\userdb.txt'
 VM_ADMIN = 'administrator'
 VM_PASS  = '12345'
 
-def usage():
-    print "iConsole> *USAGE* %s path\\to\\file" % os.path.basename( sys.argv[0] )
-    exit
+class BaseUI(Cmd):
+    """The base User Interface Object.
+    """
+    path = []
+    name = ""
 
-def error_act_handler( *para ):
-    print "iConsole> Invalid CMD"
+    def __init__(self):
+        """
+        """
+        Cmd.__init__(self)
 
-def set_vm( para ):
-    '''
-    set vm file path
-    @para - foo.vmx's full path
-    '''
-    vm_file_path = para
-    if os.path.isfile( vm_file_path ):
-        global VM_FILE
-        VM_FILE = vm_file_path
-    else:
-        print "iConsole> Invalid file path : %s" % vm_file_path
+    def make_prompt(self, name=""):
+        test_str = self.get_prompt()
+        if test_str.endswith(name):
+            test_str += "> "
+            return(test_str)
+        #the above is a little hack to test if the path
+        #is already set for us, incase this object instance
+        #is actually getting reused under the hood.
+        self.path.append(name)
+        tmp_name = ""
+        tmp_name = self.get_prompt()
+        tmp_name += "> "
+        return(tmp_name)
 
-def start_vm( para ):
-    '''
-    start vm
-    @para - foo.vmx's full path, if not specified use previous setted one
-    '''
-    vmx = VM_FILE
-    if para != '':
+    def get_prompt(self):
+        tmp_name = ""
+        for x in self.path: #iterate through object heirarchy
+            tmp_name += (x)
+        return tmp_name
 
-        vm_file_path = para
+    def do_help(self, args):
+        """
 
-        if not os.path.isfile( vm_file_path ):
-            print "iConsole> Invalid file path : %s" % vm_file_path
-            return
+        Arguments:
+        - `self`:
+        - `args`:
+        """
+        Cmd.do_help(self, args)
 
-        vmx = vm_file_path
+    def do_hist(self, args):
+        """Display command history.
 
-    assert vmx != ''
+        Arguments:
+        - `self`:
+        - `args`:
+        """
+        pp.pprint(self._hist)
 
-    vm = vmrun.Vmrun( vmx, VM_ADMIN, VM_PASS )
-    vm.start()
+    def emptyline(self):
+        """pass
 
-def suspend_vm( para ):
-    '''
-    suspend vm
-    @para - foo.vmx's full path, if not specified use previous setted one
-    '''
-    vmx = VM_FILE
-    if para != '':
-
-        vm_file_path = para
-
-        if not os.path.isfile( vm_file_path ):
-            print "iConsole> Invalid file path : %s" % vm_file_path
-            return
-
-        vmx = vm_file_path
-
-    assert vmx != ''
-
-    vm = vmrun.Vmrun( vmx, VM_ADMIN, VM_PASS )
-    vm.suspend( 'hard' )
-
-def stop_vm( para ):
-    '''
-    stop vm
-    @para - foo.vmx's full path, if not specified use previous setted one
-    '''
-    vmx = VM_FILE
-    if para != '':
-
-        vm_file_path = para
-
-        if not os.path.isfile( vm_file_path ):
-            print "iConsole> Invalid file path : %s" % vm_file_path
-            return
-
-        vmx = vm_file_path
-
-    assert vmx != ''
-
-    vm = vmrun.Vmrun( vmx, VM_ADMIN, VM_PASS )
-    vm.stop()
-
-def take_snapshot( para ):
-    pass
-
-def copy_to_vm( para ):
-    '''
-    copy file to vm
-    @para :
-        if not specify para, means copy TARGET
-        if only specify one parameter, means copy default
-        if specify 2 parameters, means copy para1, and name it para2
-    '''
-    to_name = from_name = os.path.basename( TARGET )
-    if para != '':
-        names = para.split( " " )
-        try:
-            from_name = names[0]
-            to_name   = names[1]
-        except IndexError:
-            from_name = os.path.basename( TARGET )
-            to_name   = names[0]
-
-    vm = vmrun.Vmrun( VM_FILE, VM_ADMIN, VM_PASS )
-    vm.copyFileFromHostToGuest( from_name, "c:\\_virus\\%s" % to_name )
-
-def get_from_vm( para ):
-    '''
-    get file from vm
-    @para :
-        if only specify parameter, means get default, dumped_.exe, and rename
-        if specify 2 parameters, means get para1, and name it para2
-    '''
-    to_name = from_name = "dumped_.exe"
-    cur_dir   = os.path.dirname( TARGET )
-    if para != '':
-        names = para.split( " " )
-        try:
-            from_name = names[0]
-            to_name   = names[1]
-        except IndexError:
-            from_name = "dumped_.exe"
-            to_name   = names[0]
-
-    vm = vmrun.Vmrun( VM_FILE, VM_ADMIN, VM_PASS )
-    vm.copyFileFromGuestToHost( "c:\\_virus\\%s" % from_name, "%s%s%s" % (cur_dir, os.path.sep, to_name) )
-
-def start_ollydbg( para ):
-    '''
-    start ollydbg in the vm
-    @para - file name to feed od
-    '''
-    file_name = "c:\\_virus\\%s" % os.path.basename( TARGET )
-    if para != '':
-
-        file_name = "c:\\_virus\\%s" % para
-
-    vm = vmrun.Vmrun( VM_FILE, VM_ADMIN, VM_PASS )
-    vm.runProgramInGuest( r'C:\\tools\\OllyICE\\OllyDBG.EXE', file_name )
-#    vm.runProgramInGuest( r'C:\\tools\\odbg110\\OLLYDBG.EXE', file_name )
-
-def revert_to_snap( para ):
-    '''
-    revert to snapshot
-    @para - snapshot name
-    '''
-    if para == '':
-        print "iConsole> specify snapshot name plz"
-        return
-
-    vm = vmrun.Vmrun( VM_FILE, VM_ADMIN, VM_PASS )
-    vm.revertToSnapshot( para )
-
-class win32_STARTUPINFO(ctypes.Structure):
-    _fields_ = [
-            ( 'cb',              ctypes.c_ulong  ),
-            ( 'lpReserved',      ctypes.c_char_p ),
-            ( 'lpDesktop',       ctypes.c_char_p ),
-            ( 'lpTitle',         ctypes.c_char_p ),
-            ( 'dwX',             ctypes.c_ulong  ),
-            ( 'dwY',             ctypes.c_ulong  ),
-            ( 'dwXSize',         ctypes.c_ulong  ),
-            ( 'dwYSize',         ctypes.c_ulong  ),
-            ( 'dwXCountChars',   ctypes.c_ulong  ),
-            ( 'dwYCountChars',   ctypes.c_ulong  ),
-            ( 'dwFillAttribute', ctypes.c_ulong  ),
-            ( 'dwFlags',         ctypes.c_ulong  ),
-            ( 'wShowWindow',     ctypes.c_ulong  ),
-            ( 'cbReserved2',     ctypes.c_ulong  ),
-            ( 'lpReserved2',     ctypes.c_ulong  ),
-            ( 'hStdInput',       ctypes.c_void_p ),
-            ( 'hStdOutput',      ctypes.c_void_p ),
-            ( 'hStdError',       ctypes.c_void_p ),
-            ]
-
-class win32_PROCESS_INFORMATION(ctypes.Structure):
-    _fields_ = [
-            ( 'hProcess',        ctypes.c_void_p ),
-            ( 'hThread',         ctypes.c_void_p ),
-            ( 'dwProcessId',     ctypes.c_ulong  ),
-            ( 'dwThreadId',      ctypes.c_ulong  )
-            ]
-
-def exec_hiew( para ):
-    '''
-    execute hiew
-    @para - file name
-    '''
-    file = TARGET
-
-    if para != '':
-        file = para
-
-    if not os.path.isfile( file ):
-        print "iConsole> *invalid* file"
-        return
-
-    startupInfo = win32_STARTUPINFO()
-    processInfo = win32_PROCESS_INFORMATION()
-
-    print "file = %s" % ctypes.c_char_p( file )
-    ctypes.windll.kernel32.CreateProcessA( ctypes.c_char_p(IC_HIEW), file,#ctypes.c_char_p(file),
-            None, None, False, 0x10, None, None, ctypes.pointer(startupInfo),ctypes.pointer(processInfo) )
-
-def get_md5( para ):
-    '''
-    get file's md5 digest
-    @para - file name
-    '''
-    file = TARGET
-
-    if para != '':
-        file = para
-
-    if not os.path.isfile( file ):
-        print "iConsole> *invalid* file"
-        return
-
-    fh = open( file, 'rb' )
-    m  = md5.new()
-    while 1:
-        data = fh.read( 1024 )
-        if not data:
-            break
-        m.update( data )
-
-    print "iConsole> [MD5] %s : %s" % ( file, m.hexdigest() )
-    fh.close()
-
-def get_packer_info( para ):
-    '''
-    get information about packer
-    @para - file name
-    '''
-    file = TARGET
-
-    if para != '':
-        file = para
-
-    if not os.path.isfile( file ):
-        print "iConsole> *invalid* file"
-        return
-
-    pe     = pefile.PE( file )
-    sig    = peutils.SignatureDatabase( SIG_FILE )
-    packer = sig.match( pe )
-    print "iConsole> %s" % packer
-
-ACTIONS = {
-        "set_vm"        :   set_vm,
-        "start"         :   start_vm,
-        "suspend"       :   suspend_vm,
-        "stop"          :   stop_vm,
-        "snap"          :   take_snapshot,
-        "revert"        :   revert_to_snap,
-        "cp"            :   copy_to_vm,
-        "get"           :   get_from_vm,
-        "od"            :   start_ollydbg,
-        "hiew"          :   exec_hiew,
-        "md5"           :   get_md5,
-        "pk"            :   get_packer_info
-        }
-
-def iDispatcher( cmd ):
-
-    cmd = cmd.strip( ' ' )
-
-    # FIXME
-    try:
-        if cmd.index( ',' ):
-            cmd_list = cmd.split( ',' )
-            for kmd in cmd_list:
-                iDispatcher( kmd )
-        return
-    except:
+        Arguments:
+        - `self`:
+        """
         pass
 
-    cmds = cmd.split( " ", 1 )
-    act = cmds[0]
-    try:
-        params = cmds[1]
-    except IndexError:
-        params = ''
+    def preloop(self):
+        """
 
-    if act != '':
-        ACTIONS.get( act, error_act_handler )( params )
+        Arguments:
+        - `self`:
+        """
+        Cmd.preloop(self)
+        self._hist = []
 
-def main():
-    """
-    TODO
-    """
+    def postloop(self):
+        """bye
 
-    TITLE = '          .__ _________                                 .__            \n' \
-            '          |__|\_   ___ \   ____    ____    ______ ____  |  |    ____   \n' \
-            '          |  |/    \  \/  /  _ \  /    \  /  ___//  _ \ |  |  _/ __ \  \n' \
-            '          |  |\     \____(  <_> )|   |  \ \___ \(  <_> )|  |__\  ___/  \n' \
-            '          |__| \______  / \____/ |___|  //____  >\____/ |____/ \___  > \n' \
-            '                      \/              \/      \/                   \/  \n'
+        Arguments:
+        - `self`:
+        """
+        Cmd.postloop(self)
+        print "\nExiting..."
 
-    print TITLE
+    def precmd(self, line):
+        """save line as history.
 
-    try:
-        global TARGET
-        TARGET = sys.argv[1]
-        if not os.path.isfile( TARGET ):
-            print "iConsole> %s is *NOT* a valid file" % TARGET
+        Arguments:
+        - `self`:
+        - `line`:
+        """
+        self._hist += [line.strip()]
+        return line
+
+    def postcmd(self, stop, line):
+        """
+
+        Arguments:
+        - `self`:
+        - `stop`:
+        - `line`:
+        """
+        return stop
+
+    def default(self, line):
+        """unrecognized cmd.
+
+        Arguments:
+        - `self`:
+        - `line`:
+        """
+        print "\nBad command : %s" % line
+
+    def do_exit(self, args):
+        """Exit
+
+        Arguments:
+        - `self`:
+        - `args`:
+        """
+        return -1
+
+    do_q = do_EOF = do_exit
+
+    def checkargs(self, args, num_args=None):
+        """
+        A utility function to split up the args.
+        Also check check the number of args against
+        a number of arguments
+        """
+        splitted_args = args[0].split(' ')
+        if splitted_args.__contains__(''):
+            splitted_args.remove('')
+        if num_args == None:
+            return splitted_args
+        if (len(splitted_args) < num_args):
+            print "Incorrect number of arguments."
             return
-    except IndexError:
-        usage()
+        else:
+            return splitted_args
 
-    cmd = raw_input( "iConsole> " )
-    while cmd.lower() != 'q':
-        iDispatcher( cmd )
-        cmd = raw_input( "iConsole> " )
+class MasterUI(BaseUI):
+    """
+    """
+    vm_file  = ""
+    vm_admin = "administrator"
+    vm_pass  = "12345"
+
+    def __init__(self, prompt, intro):
+        """
+
+        Arguments:
+        - `prompt`:
+        - `intro`:
+        """
+        BaseUI.__init__(self)
+        self.prompt       = self.make_prompt(prompt)
+        self.intro        = intro
+        self.doc_header   = "...oooOOO iConsole Command OOOooo..." \
+            "\n (for help, type: help <command>)"
+        self.undoc_header = ""
+        self.misc_header  = ""
+        self.ruler        = " "
+
+        if ( os.path.isfile( self.vm_file ) and
+             self.vm_admin != "" and
+             self.vm_pass  != "" ):
+            self.vmrun    = Vmrun( self.vm_file, self.vm_admin, self.vm_pass )
+
+    def do_vmset(self, *args):
+        """
+        Set vm file path
+
+        Usage:
+            vmset c:/path/to/vm.vmx
+        """
+        # FIXME can't parse option when path has space
+        # args = self.checkargs(args, 1)
+
+        if args == None: return
+
+        vmx = args[0]
+        if os.path.isfile( vmx ):
+            self.vm_file = vmx
+
+    def do_vmstart(self, *args):
+        """
+        Start vm
+
+        Usage:
+            vmstart [c:/path/to/vm.vmx]
+        """
+        # FIXME can't parse option when path has space
+        # args = self.checkargs(args)
+        if len(args) == 1 and os.path.isfile( args[0] ):
+            self.vm_file = args[0]
+            self.vmrun = Vmrun( self.vm_file, self.vm_admin, self.vm_pass )
+
+        self.vmrun.start()
+
+    def do_vmsuspend(self, *args):
+        """
+        Suspend vm
+
+        Usage:
+            vmsuspend [c:/path/to/vm.vmx]
+        """
+        if len(args) == 1 and os.path.isfile( args[0] ):
+            self.vm_file = args[0]
+            self.vmrun = Vmrun( self.vm_file, self.vm_admin, self.vm_pass )
+
+        self.vmrun.suspend( "hard" )
+
+    def do_vmstop(self, *args):
+        """
+        Suspend vm
+
+        Usage:
+            vmstop [c:/path/to/vm.vmx]
+        """
+        if len(args) == 1 and os.path.isfile( args[0] ):
+            self.vm_file = args[0]
+            self.vmrun = Vmrun( self.vm_file, self.vm_admin, self.vm_pass )
+
+        self.vmrun.stop()
+
+    def do_vmsnapshot(self, *args):
+        """
+        Take snapshot
+
+        Usage:
+            vmsnapshot ....
+        """
+        # TODO
+        pass
+
+    def do_vmcopy(self, *args):
+        """
+        Copy file to vm
+
+        Usage:
+            vmcopy from to
+        """
+        args = self.checkargs(args, 2)
+
+        if args == None: return
+
+        if self.vmrun is not None:
+            # TODO change path
+            self.vmrun.copyFileFromHostToGuest( args[0], "c:\\_virus\\%s" % args[1] )
+
+    def do_vmget(sef, *args):
+        """
+        Get file from vm
+
+        Usage:
+            vmget file_of_vm as_file_host
+        """
+        args = self.checkargs(args, 2)
+
+        if args == None: return
+
+        if self.vmrun is not None:
+            self.vmrun.copyFileFromHostToGuest( "c:\\_virus\\%s" % args[0],
+                                                args[1] )
+
+    def do_vmrevert(self, *args):
+        """
+        Rever to snapshot
+
+        Usage:
+            vmrevert snapshot_name
+        """
+        args = self.checkargs(args, 1)
+
+        if args == None: return
+
+        if self.vmrun is not None:
+            self.vmrun.revertToSnapshot( args[0] )
+
+    def do_vmod(self, *args):
+        """
+        Start ollydbg in the vm, for now file must stay in folder of "c:\_virus"...
+
+        Usage:
+            vmod file
+        """
+        args = self.checkargs(args, 1)
+
+        if args == None: return
+
+        # TODO hardcoded path
+        fn = "c:\\_virus\\%s" % args[0]
+
+        if self.vmrun is not None:
+            self.vmrun.runProgramInGuest( r'C:\\tools\\OllyICE\\OllyDBG.EXE', fn )
+
+    def do_md5(self, *args):
+        """
+        Get file's md5 digest
+
+        Usage:
+            md5 file
+        """
+        args = self.checkargs(args, 1)
+
+        if args == None: return
+
+        if not os.path.isfile(args[0]):
+            print "*invalid* file : %s" % args[0]
+            return
+
+        fh = open( args[0], "rb" )
+        m  = md5.new()
+        while True:
+            data = fh.read(1024)
+            if not data: break
+            m.update(data)
+
+        print "[MD5] %s : %s" % (args[0], m.hexdigest())
+        fh.close()
+
+    def do_pkinfo(self, *args):
+        """
+        Get pe's packer info
+
+        Usage:
+            pkinfo file
+        """
+        args = self.checkargs(args, 1)
+
+        if args == None: return
+
+        fn = args[0]
+        if not os.path.isfile(fn):
+            print "*invalid* file : %s" % fn
+            return
+
+        pe  = pefile.PE(fn)
+        sig = peutils.SignatureDatabase( SIG_FILE )
+        pk  = sig.match(pe)
+        print "[pkinfo] %s : %s" % (fn, pk)
 
 #-------------------------------------------------------------------------------
 if __name__ == '__main__':
-    main()
+    welcome = """
+
+                    ...oooOOO Welcome to OOOooo...
+
+          .__ _________                                 .__
+          |__|\_   ___ \   ____    ____    ______ ____  |  |    ____
+          |  |/    \  \/  /  _ \  /    \  /  ___//  _ \ |  |  _/ __ \
+          |  |\     \____(  <_> )|   |  \ \___ \(  <_> )|  |__\  ___/
+          |__| \______  / \____/ |___|  //____  >\____/ |____/ \___  >
+                      \/              \/      \/                   \/
+
+                    ...oooOOOOOOOOOOOOOOOOOOooo...
+"""
+    MasterUI( "iConsole", welcome ).cmdloop()
 #-------------------------------------------------------------------------------
 # EOF
