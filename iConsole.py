@@ -31,13 +31,16 @@ VM_PASS  = '12345'
 class BaseUI(Cmd):
     """The base User Interface Object.
     """
-    path = []
-    name = ""
+    path      = []
+    name      = ""
+    pwd_guest = "c:\\_virus"
+    pwd_host  = ""
 
     def __init__(self):
         """
         """
         Cmd.__init__(self)
+        self.pwd_host = os.getcwd()
 
     def make_prompt(self, name=""):
         test_str = self.get_prompt()
@@ -76,6 +79,43 @@ class BaseUI(Cmd):
         - `args`:
         """
         pp.pprint(self._hist)
+
+    def do_pwd(self, args):
+        """Display current directory of Guest.
+
+        Arguments:
+        - `self`:
+        - `args`:
+        """
+        print self.pwd_guest
+
+    def do_lpwd(self, args):
+        """Display current display of Host.
+
+        Arguments:
+        - `self`:
+        - `args`:
+        """
+        print self.pwd_host
+
+    def do_cd(self, args):
+        """cd in guest
+
+        Arguments:
+        - `self`:
+        - `args`:
+        """
+        pass                    # TODO
+
+    def do_lcd(self, args):
+        """cd in host
+
+        Arguments:
+        - `self`:
+        - `args`:
+        """
+        os.chdir(args)
+        self.pwd_host = os.getcwd()
 
     def emptyline(self):
         """pass
@@ -268,7 +308,7 @@ class MasterUI(BaseUI):
 
         if self.vmrun is not None:
             # TODO change path
-            self.vmrun.copyFileFromHostToGuest( args[0], "c:\\_virus\\%s" % args[1] )
+            self.vmrun.copyFileFromHostToGuest( args[0], "%s\\%s" % (self.pwd_guest, args[1]) )
 
     def do_vmget(sef, *args):
         """
@@ -282,7 +322,7 @@ class MasterUI(BaseUI):
         if args == None: return
 
         if self.vmrun is not None:
-            self.vmrun.copyFileFromHostToGuest( "c:\\_virus\\%s" % args[0],
+            self.vmrun.copyFileFromHostToGuest( "%s\\%s" % (self.pwd_guest, args[0]),
                                                 args[1] )
 
     def do_vmrevert(self, *args):
@@ -310,8 +350,7 @@ class MasterUI(BaseUI):
 
         if args == None: return
 
-        # TODO hardcoded path
-        fn = "c:\\_virus\\%s" % args[0]
+        fn = "%s\\%s" % (self.pwd_guest, args[0])
 
         if self.vmrun is not None:
             self.vmrun.runProgramInGuest( r'C:\\tools\\OllyICE\\OllyDBG.EXE', fn )
@@ -364,19 +403,14 @@ class MasterUI(BaseUI):
 
 #-------------------------------------------------------------------------------
 if __name__ == '__main__':
-    welcome = """
-
-                    ...oooOOO Welcome to OOOooo...
-
-          .__ _________                                 .__
-          |__|\_   ___ \   ____    ____    ______ ____  |  |    ____
-          |  |/    \  \/  /  _ \  /    \  /  ___//  _ \ |  |  _/ __ \
-          |  |\     \____(  <_> )|   |  \ \___ \(  <_> )|  |__\  ___/
-          |__| \______  / \____/ |___|  //____  >\____/ |____/ \___  >
-                      \/              \/      \/                   \/
-
-                    ...oooOOOOOOOOOOOOOOOOOOooo...
-"""
-    MasterUI( "iConsole", welcome ).cmdloop()
+    TITLE = '                ...oooOOO Welcome to OOOooo...\n' \
+            '      .__ _________                                 .__            \n' \
+            '      |__|\_   ___ \   ____    ____    ______ ____  |  |    ____   \n' \
+            '      |  |/    \  \/  /  _ \  /    \  /  ___//  _ \ |  |  _/ __ \  \n' \
+            '      |  |\     \____(  <_> )|   |  \ \___ \(  <_> )|  |__\  ___/  \n' \
+            '      |__| \______  / \____/ |___|  //____  >\____/ |____/ \___  > \n' \
+            '                  \/              \/      \/                   \/  \n' \
+            '                ...oooOOOOOOOOOOOOOOOOOOooo...'
+    MasterUI( "iConsole", TITLE ).cmdloop()
 #-------------------------------------------------------------------------------
 # EOF
