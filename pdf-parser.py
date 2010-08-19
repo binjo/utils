@@ -269,7 +269,25 @@ class cPDFParser:
                                     if self.verbose:
                                         print 'todo 6: %d %s' % (self.token[0], repr(self.token[1]))
                             else:
-                                self.oPDFTokenizer.unget(self.token2)
+                                # fix issue when comments( or garbage?? ) inside obj
+                                # e.x :
+                                # 00000170:  5D 0A 3E 3E-0A 65 6E 64-6F 62 6A 0A-35 25 0A 30  ].>>.endobj.5%.0
+                                # 00000180:  20 6F 62 6A-3C 3C 0A 2F-4C 65 6E 67-74 68 20 2B  obj<<./Length +
+                                if self.token2[1][0] == '%':
+                                    self.token3 = self.oPDFTokenizer.TokenIgnoreWhiteSpace()
+                                    if IsNumeric(self.token3[1]):
+                                        self.token4 = self.oPDFTokenizer.TokenIgnoreWhiteSpace()
+                                        if self.token4[1] == 'obj':
+                                            self.objectId = eval(self.token[1])
+                                            self.objectVersion = eval(self.token3[1])
+                                            self.context = CONTEXT_OBJ
+                                        else:
+                                            self.oPDFTokenizer.unget(self.token4)
+                                            self.oPDFTokenizer.unget(self.token3)
+                                            if self.verbose:
+                                                print 'todo 6: %d %s' % (self.token[0], repr(self.token[1]))
+                                else:
+                                    self.oPDFTokenizer.unget(self.token2)
                                 if self.verbose:
                                     print 'todo 7: %d %s' % (self.token[0], repr(self.token[1]))
                         elif self.token[1] == 'trailer':
