@@ -123,22 +123,23 @@ int64 FindStartOfObj(int64 iStart, int &iIndexLength, int &iWhiteSpace1Length, i
 		if (iIndex < 0)
 			break;
 		bChar = ReadByte(iIndex);
+
 		if (iEndVersion == -1)
 		{
 			if (bChar == ' ')
 				;
 			else if (bChar >= '0' && bChar <= '9')
 				iEndVersion = iIndex;
-			else
+            else
 				break;
 		}
 		else if (iStartVersion == -1)
 		{
 			if (bChar >= '0' && bChar <= '9')
 				;
-			else if (bChar == ' ')
+			else if (bChar == ' ' || bChar == '\x0a' || bChar == '\x25')
 				iStartVersion = iIndex + 1;
-			else
+            else
 				break;
 		}
 		else if (iEndIndex == -1)
@@ -147,7 +148,9 @@ int64 FindStartOfObj(int64 iStart, int &iIndexLength, int &iWhiteSpace1Length, i
 				;
 			else if (bChar >= '0' && bChar <= '9')
 				iEndIndex = iIndex;
-			else
+			else if (bChar == '\x0a' || bChar == '\x25')
+                ;
+            else
 				break;
 		}
 		else if (iStartIndex == -1)
