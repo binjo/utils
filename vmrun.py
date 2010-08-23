@@ -13,7 +13,7 @@ import subprocess
 class Vmrun:
 
     # TODO
-    VMRUN_VERSION       =   '0.1.3'
+    VMRUN_VERSION       =   '0.1.4'
 
     def execute( self, path, *cmd ):
 
@@ -45,20 +45,28 @@ class Vmrun:
         if vmrun != '':
             self.VMRUN_PATH = vmrun
         else:
-            # get vmrun.exe's full path via registry
-            import _winreg
-            reg = _winreg.ConnectRegistry( None, _winreg.HKEY_LOCAL_MACHINE )
-            try:
-                rh = _winreg.OpenKey( reg, r'SOFTWARE\VMware, Inc.\VMware Workstation' )
+            if os.sys.platform == "win32":
+                # get vmrun.exe's full path via registry
+                import _winreg
+                reg = _winreg.ConnectRegistry( None, _winreg.HKEY_LOCAL_MACHINE )
                 try:
-                    vw_dir = _winreg.QueryValueEx( rh, 'InstallPath' )[0]
+                    rh = _winreg.OpenKey( reg, r'SOFTWARE\VMware, Inc.\VMware Workstation' )
+                    try:
+                        vw_dir = _winreg.QueryValueEx( rh, 'InstallPath' )[0]
+                    finally:
+                        _winreg.CloseKey( rh )
                 finally:
-                    _winreg.CloseKey( rh )
-            finally:
-                reg.Close()
+                    reg.Close()
 
-            if vw_dir != '':
-                self.VMRUN_PATH = vw_dir + 'vmrun.exe'
+                if vw_dir != '':
+                    self.VMRUN_PATH = vw_dir + 'vmrun.exe'
+            else:
+                if os.environ.has_key("PATH"):
+                    for path in os.environ["PATH"].split(os.pathsep):
+                        tmp_file = path + os.sep + "vmrun"
+                        if os.path.exists(tmp_file):
+                            self.VMRUN_PATH = tmp_file
+                            break
 
     #
     # POWER COMMANDS
@@ -210,6 +218,20 @@ class Vmrun:
         '''
         return self.vmrun( 'removeSharedFolder', share_name )
 
+    def enableSharedFolders( self ):
+        '''
+        enableSharedFolders      Path to vmx file     Enable shared folders in Guest
+                                 [runtime]
+        '''
+        return self.vmrun( 'enableSharedFolders' )
+
+    def disableSharedFolders( self ):
+        '''
+        disableSharedFolders     Path to vmx file     Disable shared folders in Guest
+                                 [runtime]
+        '''
+        return self.vmrun( 'disableSharedFolders' )
+
     def listProcessesInGuest( self ):
         '''
         listProcessesInGuest     Path to vmx file     List running processes in Guest OS
@@ -328,6 +350,19 @@ class Vmrun:
                                  'VP script text'
         '''
         return self.vmrun( 'vprobeLoad', script )
+
+    def vprobeLoadFile( self, vp ):
+        '''
+        vprobeLoadFile           Path to vmx file     Load VP file
+                                 Path to VP file
+        '''
+        return self.vmrun( 'vprobeLoadFile', vp )
+
+    def vprobeReset( self ):
+        '''
+        vprobeReset              Path to vmx file     Disable all vprobes
+        '''
+        return self.vmrun( 'vprobeReset' )
 
     def vprobeListProbes( self ):
         '''
