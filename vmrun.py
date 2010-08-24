@@ -389,13 +389,37 @@ class Vmrun:
         '''
         upgradevm                Path to vmx file     Upgrade VM file format, virtual hw
         '''
-        return self.vmrun( 'upgradevm', self.VM_FILE )
+        return self.vmrun( 'upgradevm' )
 
     def installtools( self ):
         '''
         installtools             Path to vmx file     Install Tools in Guest OS
         '''
-        return self.vmrun( 'installtools', self.VM_FILE )
+        return self.vmrun( 'installtools' )
+
+    def register( self ):
+        '''
+        register                 Path to vmx file     Register a VM
+        '''
+        return self.vmrun( 'register' )
+
+    def unregister( self ):
+        '''
+        unregister                 Path to vmx file     Unregister a VM
+        '''
+        return self.vmrun( 'unregister' )
+
+    def listRegisteredVM( self ):
+        '''
+        listRegisteredVM                              List registered VMs
+        '''
+        return self.vmrun( 'listRegisteredVM' )
+
+    def deleteVM( self ):
+        '''
+        deleteVM                 Path to vmx file     Delete a VM
+        '''
+        return self.vmrun( 'deleteVM' )
 
     def clone( self, dest_vmx, mode, snap_name='binjo' ):
         '''
