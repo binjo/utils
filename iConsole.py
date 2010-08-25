@@ -12,7 +12,7 @@ console rulz...
 
 import os, sys
 import subprocess
-import md5
+import hashlib
 import pefile, peutils
 import ctypes
 import pprint as pp
@@ -400,7 +400,7 @@ class ConsoleUI(VmxUI):
 
         if self.vmrun is not None:
             # TODO change path
-            self.vmrun.copyFileFromHostToGuest( argv[0], "\"%s%s%s\"" % (self.cwd_guest, os.sep, argv[1]) )
+            self.vmrun.copyFileFromHostToGuest( argv[0], "\"%s\\%s\"" % (self.cwd_guest, argv[1]) )
         else:
             print "type 'use' first..."
 
@@ -480,7 +480,7 @@ class ConsoleUI(VmxUI):
             return
 
         fh = open( argv[0], "rb" )
-        m  = md5.new()
+        m  = hashlib.md5()
         while True:
             data = fh.read(1024)
             if not data: break
