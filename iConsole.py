@@ -18,6 +18,7 @@ import ctypes
 import pprint as pp
 from vmrun import Vmrun
 from cmd   import *
+from ConfigParser import *
 
 TARGET   = ''
 # default
@@ -28,19 +29,78 @@ SIG_FILE = r'D:\Tools\avtools\peid\userdb.txt'
 VM_ADMIN = 'administrator'
 VM_PASS  = '12345'
 
-class BaseUI(Cmd):
+def string2args(arg):
+    """convert string `arg' to a list of argument.
+
+    Arguments:
+    - `arg`:
+    """
+    argv = []
+    quotation_mark = False
+
+    for x in arg.split(" "):
+
+        if x == "": continue
+
+        if (not quotation_mark and ( x.startswith("\"") or x.startswith("'") )):
+            quotation_mark = True
+            x = x[1:]
+            argv.append(x)
+
+        elif (quotation_mark and ( x.endswith("\"") or x.endswith("'") )):
+            quotation_mark = False
+            x = x[:-1]
+            argv[-1] += " %s" % x
+
+        elif quotation_mark:
+            argv[-1] += " %s" % x
+
+        else:
+            argv.append(x)
+
+    return argv
+
+class VmxUI(Cmd):
     """The base User Interface Object.
     """
     path      = []
     name      = ""
-    pwd_guest = "c:\\_virus"
-    pwd_host  = ""
 
-    def __init__(self):
+    vmx       = None
+    vmx_admin = None
+    vmx_pass  = None
+    cwd_guest = None
+
+    cwd_host  = None
+
+    def __init__(self, config='.config'):
         """
         """
         Cmd.__init__(self)
-        self.pwd_host = os.getcwd()
+        if os.path.exists(config):
+            self.cfg = RawConfigParser()
+            self.cfg.read(config)
+
+        try:
+            self.cwd_host = self.cfg.get( "host", "cwd" )
+        except:
+            self.cwd_host = os.getcwd()
+
+    def init_vmx(self, section):
+        """initialize vmx releated settings via specified section of config
+
+        Arguments:
+        - `self`:
+        - `section`:
+        """
+        try:
+            self.section   = section
+            self.vmx       = self.cfg.get( section, "vmx" )
+            self.vmx_admin = self.cfg.get( section, "admin" )
+            self.vmx_pass  = self.cfg.get( section, "pass" )
+            self.cwd_guest = self.cfg.get( section, "cwd" )
+        except Exception, e:
+            print "[-] error init_vmx: %s" % str(e)
 
     def make_prompt(self, name=""):
         test_str = self.get_prompt()
@@ -62,6 +122,54 @@ class BaseUI(Cmd):
             tmp_name += (x)
         return tmp_name
 
+    def do_set(self, args):
+        """set configs
+
+        Arguments:
+        - `self`:
+        - `args`:
+        """
+        argv = self.checkargs(args)
+        if len(argv) == 0:
+            for sec in self.cfg.sections():
+                print "[%s]" % sec
+            print "for more information, please type 'show'"
+        elif len(argv) == 3:
+            self.cfg.set( argv[0], argv[1], argv[2] )
+        else:
+            print "[-] invalid args"
+
+    def do_show(self, args):
+        """show specifical settings
+
+        Arguments:
+        - `self`:
+        - `args`:
+        """
+        argv = self.checkargs(args, 1)
+        if argv is not None:
+            try:
+                sec = argv[0]
+                print "[%s]" % sec
+                for n, v in self.cfg.items(sec):
+                    print "%s => %s" % (n, v)
+            except NoSectionError, e:
+                print "[-] error : %s" % str(e)
+
+    def do_use(self, args):
+        """use specified vmx file
+
+        Arguments:
+        - `self`:
+        - `args`:
+        """
+        argv = self.checkargs(args, 1)
+        if argv is not None:
+            if self.cfg.has_section( "vmx-%s" % argv[0] ):
+                self.init_vmx( "vmx-%s" % argv[0] )
+            else:
+                print "[-] error : %s vmx settings *NOT* exists"
+
     def do_help(self, args):
         """
 
@@ -82,21 +190,16 @@ class BaseUI(Cmd):
 
     def do_pwd(self, args):
         """Display current directory of Guest.
-
-        Arguments:
-        - `self`:
-        - `args`:
         """
-        print self.pwd_guest
+        if self.cwd_guest is not None:
+            print self.cwd_guest
+        else:
+            print "type 'use' first..."
 
     def do_lpwd(self, args):
         """Display current display of Host.
-
-        Arguments:
-        - `self`:
-        - `args`:
         """
-        print self.pwd_host
+        print self.cwd_host
 
     def do_cd(self, args):
         """cd in guest
@@ -105,7 +208,12 @@ class BaseUI(Cmd):
         - `self`:
         - `args`:
         """
-        pass                    # TODO
+        argv = self.checkargs(args, 1)
+        if argv is not None:
+            if self.cwd_guest is not None:
+                self.cwd_guest = argv[0]
+            else:
+                print "type 'use' first..."
 
     def do_lcd(self, args):
         """cd in host
@@ -115,7 +223,7 @@ class BaseUI(Cmd):
         - `args`:
         """
         os.chdir(args)
-        self.pwd_host = os.getcwd()
+        self.cwd_host = os.getcwd()
 
     def emptyline(self):
         """pass
@@ -189,32 +297,28 @@ class BaseUI(Cmd):
         Also check check the number of args against
         a number of arguments
         """
-        splitted_args = args[0].split(' ')
-        if splitted_args.__contains__(''):
-            splitted_args.remove('')
+        argv = string2args(args)
         if num_args == None:
-            return splitted_args
-        if (len(splitted_args) < num_args):
+            return argv
+        if (len(argv) < num_args):
             print "Incorrect number of arguments."
             return
         else:
-            return splitted_args
+            return argv
 
-class MasterUI(BaseUI):
+class ConsoleUI(VmxUI):
     """
     """
-    vm_file  = ""
-    vm_admin = "administrator"
-    vm_pass  = "12345"
+    vmrun = None
 
-    def __init__(self, prompt, intro):
+    def __init__(self, prompt, intro, debug=False):
         """
 
         Arguments:
         - `prompt`:
         - `intro`:
         """
-        BaseUI.__init__(self)
+        VmxUI.__init__(self)
         self.prompt       = self.make_prompt(prompt)
         self.intro        = intro
         self.doc_header   = "...oooOOO iConsole Command OOOooo..." \
@@ -222,70 +326,64 @@ class MasterUI(BaseUI):
         self.undoc_header = ""
         self.misc_header  = ""
         self.ruler        = " "
+        self.debug        = debug
 
-        if ( os.path.isfile( self.vm_file ) and
-             self.vm_admin != "" and
-             self.vm_pass  != "" ):
-            self.vmrun    = Vmrun( self.vm_file, self.vm_admin, self.vm_pass )
+    def do_use(self, args):
+        """use specified vmx file, and initialize vmrun.
 
-    def do_vmset(self, *args):
+        Arguments:
+        - `self`:
+        - `args`:
         """
-        Set vm file path
+        VmxUI.do_use(self, args)
+        if ( self.vmx is not None and
+             self.vmx_admin is not None and
+             self.vmx_pass is not None ):
+            self.vmrun = Vmrun( self.vmx, self.vmx_admin, self.vmx_pass, debug=self.debug )
 
-        Usage:
-            vmset c:/path/to/vm.vmx
-        """
-        # FIXME can't parse option when path has space
-        # args = self.checkargs(args, 1)
-
-        if args == None: return
-
-        vmx = args[0]
-        if os.path.isfile( vmx ):
-            self.vm_file = vmx
-
-    def do_vmstart(self, *args):
+    def do_vmstart(self, args):
         """
         Start vm
 
         Usage:
-            vmstart [c:/path/to/vm.vmx]
+            vmstart
         """
-        # FIXME can't parse option when path has space
-        # args = self.checkargs(args)
-        if len(args) == 1 and os.path.isfile( args[0] ):
-            self.vm_file = args[0]
-            self.vmrun = Vmrun( self.vm_file, self.vm_admin, self.vm_pass )
+        if self.vmrun is not None:
+            self.vmrun.start()
+        else:
+            print "type 'use' first..."
 
-        self.vmrun.start()
+    do_start = do_vmstart
 
-    def do_vmsuspend(self, *args):
-        """
-        Suspend vm
-
-        Usage:
-            vmsuspend [c:/path/to/vm.vmx]
-        """
-        if len(args) == 1 and os.path.isfile( args[0] ):
-            self.vm_file = args[0]
-            self.vmrun = Vmrun( self.vm_file, self.vm_admin, self.vm_pass )
-
-        self.vmrun.suspend( "hard" )
-
-    def do_vmstop(self, *args):
+    def do_vmsuspend(self, args):
         """
         Suspend vm
 
         Usage:
-            vmstop [c:/path/to/vm.vmx]
+            vmsuspend
         """
-        if len(args) == 1 and os.path.isfile( args[0] ):
-            self.vm_file = args[0]
-            self.vmrun = Vmrun( self.vm_file, self.vm_admin, self.vm_pass )
+        if self.vmrun is not None:
+            self.vmrun.suspend( "hard" )
+        else:
+            print "type 'use' first..."
 
-        self.vmrun.stop()
+    do_suspend = do_vmsuspend
 
-    def do_vmsnapshot(self, *args):
+    def do_vmstop(self, args):
+        """
+        Suspend vm
+
+        Usage:
+            vmstop
+        """
+        if self.vmrun is not None:
+            self.vmrun.stop()
+        else:
+            print "type 'use' first..."
+
+    do_stop = do_vmstop
+
+    def do_vmsnapshot(self, args):
         """
         Take snapshot
 
@@ -295,103 +393,122 @@ class MasterUI(BaseUI):
         # TODO
         pass
 
-    def do_vmcopy(self, *args):
+    do_snap = do_vmsnapshot
+
+    def do_vmcopy(self, args):
         """
         Copy file to vm
 
         Usage:
             vmcopy from to
         """
-        args = self.checkargs(args, 2)
+        argv = self.checkargs(args, 2)
 
-        if args == None: return
+        if argv == None: return
 
         if self.vmrun is not None:
             # TODO change path
-            self.vmrun.copyFileFromHostToGuest( args[0], "%s\\%s" % (self.pwd_guest, args[1]) )
+            self.vmrun.copyFileFromHostToGuest( argv[0], "%s\\%s" % (self.cwd_guest, argv[1]) )
+        else:
+            print "type 'use' first..."
 
-    def do_vmget(sef, *args):
+    do_cp = do_vmcopy
+
+    def do_vmget(self, args):
         """
         Get file from vm
 
         Usage:
             vmget file_of_vm as_file_host
         """
-        args = self.checkargs(args, 2)
+        argv = self.checkargs(args, 2)
 
-        if args == None: return
+        if argv == None: return
 
         if self.vmrun is not None:
-            self.vmrun.copyFileFromHostToGuest( "%s\\%s" % (self.pwd_guest, args[0]),
-                                                args[1] )
+            self.vmrun.copyFileFromGuestToHost( "%s\\%s" % (self.cwd_guest, argv[0]),
+                                                "%s\\%s" % (self.cwd_host, argv[1]) )
+        else:
+            print "type 'use' first..."
 
-    def do_vmrevert(self, *args):
+    do_get = do_vmget
+
+    def do_vmrevert(self, args):
         """
         Rever to snapshot
 
         Usage:
             vmrevert snapshot_name
         """
-        args = self.checkargs(args, 1)
+        argv = self.checkargs(args, 1)
 
-        if args == None: return
+        if argv == None: return
 
         if self.vmrun is not None:
-            self.vmrun.revertToSnapshot( args[0] )
+            self.vmrun.revertToSnapshot( argv[0] )
+        else:
+            print "type 'use' first..."
 
-    def do_vmod(self, *args):
+    def do_vmod(self, args):
         """
-        Start ollydbg in the vm, for now file must stay in folder of "c:\_virus"...
+        Start ollydbg in the vm
 
         Usage:
             vmod file
         """
-        args = self.checkargs(args, 1)
+        argv = self.checkargs(args, 1)
 
-        if args == None: return
+        if argv == None: return
 
-        fn = "%s\\%s" % (self.pwd_guest, args[0])
+        fn = "%s\\%s" % (self.cwd_guest, args[0])
 
         if self.vmrun is not None:
-            self.vmrun.runProgramInGuest( r'C:\\tools\\OllyICE\\OllyDBG.EXE', fn )
+            try:
+                self.vmrun.runProgramInGuest( self.cfg.get( self.section, "ollydbg" ), fn )
+            except Exception, e:
+                print "[-] error: %s" % str(e)
+        else:
+            print "type 'use' first..."
 
-    def do_md5(self, *args):
+    do_od = do_vmod
+
+    def do_md5(self, args):
         """
         Get file's md5 digest
 
         Usage:
             md5 file
         """
-        args = self.checkargs(args, 1)
+        argv = self.checkargs(args, 1)
 
-        if args == None: return
+        if argv == None: return
 
-        if not os.path.isfile(args[0]):
-            print "*invalid* file : %s" % args[0]
+        if not os.path.isfile(argv[0]):
+            print "*invalid* file : %s" % argv[0]
             return
 
-        fh = open( args[0], "rb" )
+        fh = open( argv[0], "rb" )
         m  = md5.new()
         while True:
             data = fh.read(1024)
             if not data: break
             m.update(data)
 
-        print "[MD5] %s : %s" % (args[0], m.hexdigest())
+        print "[MD5] %s : %s" % (argv[0], m.hexdigest())
         fh.close()
 
-    def do_pkinfo(self, *args):
+    def do_pkinfo(self, args):
         """
         Get pe's packer info
 
         Usage:
             pkinfo file
         """
-        args = self.checkargs(args, 1)
+        argv = self.checkargs(args, 1)
 
-        if args == None: return
+        if argv == None: return
 
-        fn = args[0]
+        fn = argv[0]
         if not os.path.isfile(fn):
             print "*invalid* file : %s" % fn
             return
@@ -411,6 +528,6 @@ if __name__ == '__main__':
             '      |__| \______  / \____/ |___|  //____  >\____/ |____/ \___  > \n' \
             '                  \/              \/      \/                   \/  \n' \
             '                ...oooOOOOOOOOOOOOOOOOOOooo...'
-    MasterUI( "iConsole", TITLE ).cmdloop()
+    ConsoleUI( "iConsole", TITLE, debug=True ).cmdloop()
 #-------------------------------------------------------------------------------
 # EOF
