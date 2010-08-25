@@ -1,14 +1,14 @@
 #!/usr/bin/env python
 # -*- coding : utf-8 -*-
 
-"""
+__author__      = "Binjo"
+__version__     = "0.3"
+__date__        = "2008-03-17 11:15:44"
+__description__ = """
 iConsole.py
 
-
+console rulz...
 """
-__author__  = 'Binjo'
-__version__ = '0.2'
-__date__    = '2008-03-17 11:15:44'
 
 import os, sys
 import subprocess
@@ -16,18 +16,10 @@ import md5
 import pefile, peutils
 import ctypes
 import pprint as pp
-from vmrun import Vmrun
-from cmd   import *
+import optparse
+from vmrun        import Vmrun
+from cmd          import *
 from ConfigParser import *
-
-TARGET   = ''
-# default
-VM_FILE  = r'D:\VMZ\XP_TRAIN\Windows XP Professional.vmx'
-IC_HIEW  = r'D:\Tools\avtools\hiew7.2\hiew.exe'
-SIG_FILE = r'D:\Tools\avtools\peid\userdb.txt'
-# TODO
-VM_ADMIN = 'administrator'
-VM_PASS  = '12345'
 
 def string2args(arg):
     """convert string `arg' to a list of argument.
@@ -311,14 +303,14 @@ class ConsoleUI(VmxUI):
     """
     vmrun = None
 
-    def __init__(self, prompt, intro, debug=False):
+    def __init__(self, prompt, intro, config='.config', debug=False):
         """
 
         Arguments:
         - `prompt`:
         - `intro`:
         """
-        VmxUI.__init__(self)
+        VmxUI.__init__(self, config)
         self.prompt       = self.make_prompt(prompt)
         self.intro        = intro
         self.doc_header   = "...oooOOO iConsole Command OOOooo..." \
@@ -528,6 +520,13 @@ if __name__ == '__main__':
             '      |__| \______  / \____/ |___|  //____  >\____/ |____/ \___  > \n' \
             '                  \/              \/      \/                   \/  \n' \
             '                ...oooOOOOOOOOOOOOOOOOOOooo...'
-    ConsoleUI( "iConsole", TITLE, debug=True ).cmdloop()
+
+    opt = optparse.OptionParser( usage="usage: %prog [options]\n" + __description__, version="%prog " + __version__ )
+    opt.add_option( "-c", "--config", help="file name of config", default=".config" )
+    opt.add_option( "-d", "--debug",  help="out put debug info",  default=False, action="store_true" )
+
+    (opts, args) = opt.parse_args()
+
+    ConsoleUI( "iConsole", TITLE, config=opts.config, debug=opts.debug ).cmdloop()
 #-------------------------------------------------------------------------------
 # EOF
