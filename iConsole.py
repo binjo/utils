@@ -400,7 +400,7 @@ class ConsoleUI(VmxUI):
 
         if self.vmrun is not None:
             # TODO change path
-            self.vmrun.copyFileFromHostToGuest( argv[0], "%s\\%s" % (self.cwd_guest, argv[1]) )
+            self.vmrun.copyFileFromHostToGuest( argv[0], "\"%s%s%s\"" % (self.cwd_guest, os.sep, argv[1]) )
         else:
             print "type 'use' first..."
 
@@ -418,8 +418,8 @@ class ConsoleUI(VmxUI):
         if argv == None: return
 
         if self.vmrun is not None:
-            self.vmrun.copyFileFromGuestToHost( "%s\\%s" % (self.cwd_guest, argv[0]),
-                                                "%s\\%s" % (self.cwd_host, argv[1]) )
+            self.vmrun.copyFileFromGuestToHost( "\"%s\\%s\"" % (self.cwd_guest, argv[0]),
+                                                "%s%s%s" % (self.cwd_host, os.sep, argv[1]) )
         else:
             print "type 'use' first..."
 
