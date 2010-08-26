@@ -462,7 +462,7 @@ class ConsoleUI(VmxUI):
                 pname = argv.pop(0)
                 param = " ".join(argv) # FIXME
                 # TODO n/a/i
-                print "".join( self.vmrun.runProgramInGuest( "%s" % self.cfg.get( self.section, pname ), "n", "%s" % param) )
+                print "".join( self.vmrun.runProgramInGuest( "\"%s\"" % self.cfg.get( self.section, pname ), "n", "\"%s\"" % param) )
             except Exception, e:
                 print "[-] error : %s" % str(e)
 
