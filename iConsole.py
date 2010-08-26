@@ -320,12 +320,24 @@ class ConsoleUI(VmxUI):
         self.ruler        = " "
         self.debug        = debug
 
-    def do_use(self, args):
-        """use specified vmx file, and initialize vmrun.
+    # FIXME awkward assert...
+    def assert_vmrun(self):
+        """Assert vmrun is properly initialized.
 
         Arguments:
         - `self`:
-        - `args`:
+        """
+        if self.vmrun is None:
+            print "type 'use' first..."
+            return 0
+        else:
+            return 1
+
+    def do_use(self, args):
+        """use specified vmx file, and initialize vmrun.
+
+        Usage:
+            use vmx-name
         """
         VmxUI.do_use(self, args)
         if ( self.vmx is not None and
@@ -340,10 +352,7 @@ class ConsoleUI(VmxUI):
         Usage:
             vmstart
         """
-        if self.vmrun is not None:
-            self.vmrun.start()
-        else:
-            print "type 'use' first..."
+        return self.assert_vmrun() and "".join( self.vmrun.start() )
 
     do_start = do_vmstart
 
@@ -354,10 +363,7 @@ class ConsoleUI(VmxUI):
         Usage:
             vmsuspend
         """
-        if self.vmrun is not None:
-            self.vmrun.suspend( "hard" )
-        else:
-            print "type 'use' first..."
+        return self.assert_vmrun() and "".join( self.vmrun.suspend( "hard" ) )
 
     do_suspend = do_vmsuspend
 
@@ -368,24 +374,9 @@ class ConsoleUI(VmxUI):
         Usage:
             vmstop
         """
-        if self.vmrun is not None:
-            self.vmrun.stop()
-        else:
-            print "type 'use' first..."
+        return self.assert_vmrun() and "".join( self.vmrun.stop() )
 
     do_stop = do_vmstop
-
-    def do_vmsnapshot(self, args):
-        """
-        Take snapshot
-
-        Usage:
-            vmsnapshot ....
-        """
-        # TODO
-        pass
-
-    do_snap = do_vmsnapshot
 
     def do_vmcopy(self, args):
         """
@@ -398,11 +389,9 @@ class ConsoleUI(VmxUI):
 
         if argv == None: return
 
-        if self.vmrun is not None:
-            # TODO change path
-            self.vmrun.copyFileFromHostToGuest( argv[0], "\"%s\\%s\"" % (self.cwd_guest, argv[1]) )
-        else:
-            print "type 'use' first..."
+        # TODO change path
+        return self.assert_vmrun() and \
+            "".join( self.vmrun.copyFileFromHostToGuest( argv[0], "\"%s\\%s\"" % (self.cwd_guest, argv[1]) ) )
 
     do_cp = do_vmcopy
 
@@ -417,52 +406,73 @@ class ConsoleUI(VmxUI):
 
         if argv == None: return
 
-        if self.vmrun is not None:
-            self.vmrun.copyFileFromGuestToHost( "\"%s\\%s\"" % (self.cwd_guest, argv[0]),
-                                                "%s%s%s" % (self.cwd_host, os.sep, argv[1]) )
-        else:
-            print "type 'use' first..."
+        return self.assert_vmrun() and \
+            "".join( self.vmrun.copyFileFromGuestToHost( "\"%s\\%s\"" % (self.cwd_guest, argv[0]),
+                                                         "%s%s%s" % (self.cwd_host, os.sep, argv[1]) ) )
 
     do_get = do_vmget
 
-    def do_vmrevert(self, args):
-        """
-        Rever to snapshot
+    def do_vmsnap(self, args):
+        """Snapshot related commands
 
         Usage:
-            vmrevert snapshot_name
+            [vm]snap list/create/delete/revert snap-name
         """
-        argv = self.checkargs(args, 1)
+        def vmsnap(argv):
+            """
 
-        if argv == None: return
+            Arguments:
+            - `*argv`:
+            """
+            if ( argv[0] == "list" or argv[0] == "l" ):
+                print "".join( self.vmrun.listSnapshots() )
+            elif ( argv[0] == "create" or
+                   argv[0] == "c" ) and argv[1] != "":
+                print "".join( self.vmrun.snapshot( argv[1] ) )
+            elif ( argv[0] == "delete" or
+                   argv[0] == "d" or
+                   argv[0] == "del" ) and argv[1] != "":
+                print "".join( self.vmrun.deleteSnapshot( argv[1] ) )
+            elif ( argv[0] == "revert" or
+                   argv[0] == "r" ) and argv[1] != "":
+                print "".join( self.vmrun.revertToSnapshot( argv[1] ) )
 
-        if self.vmrun is not None:
-            self.vmrun.revertToSnapshot( argv[0] )
-        else:
-            print "type 'use' first..."
+        argv = self.checkargs(args)
 
-    def do_vmod(self, args):
+        if argv == []: print "type 'help [vm]snap' ..."; return
+
+        return self.assert_vmrun() and vmsnap(argv)
+
+    do_snap = do_vmsnap
+
+    def do_vmexec(self, args):
+        """Execute program in the guest
+
+        Arguments:
+        - `self`:
+        - `args`:
         """
-        Start ollydbg in the vm
+        def vmexec(argv):
+            """
 
-        Usage:
-            vmod file
-        """
-        argv = self.checkargs(args, 1)
-
-        if argv == None: return
-
-        fn = "%s\\%s" % (self.cwd_guest, args[0])
-
-        if self.vmrun is not None:
+            Arguments:
+            - `argv`:
+            """
             try:
-                self.vmrun.runProgramInGuest( self.cfg.get( self.section, "ollydbg" ), fn )
+                pname = argv.pop(0)
+                param = " ".join(argv) # FIXME
+                # TODO n/a/i
+                print "".join( self.vmrun.runProgramInGuest( "%s" % self.cfg.get( self.section, pname ), "n", "%s" % param) )
             except Exception, e:
-                print "[-] error: %s" % str(e)
-        else:
-            print "type 'use' first..."
+                print "[-] error : %s" % str(e)
 
-    do_od = do_vmod
+        argv = self.checkargs(args)
+
+        if argv == []: print "type 'help [vm]exec' ..."; return
+
+        return self.assert_vmrun() and vmexec(argv)
+
+    do_exec = do_vmexec
 
     def do_md5(self, args):
         """
