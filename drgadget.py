@@ -4,14 +4,21 @@
 #   ----------------------------------------
 #   author:     Dennis Elser
 #   bugs:       de dot backtrace at dennis
-#   version:    0.2
+version      =  "0.3"
 #
 #   history:
-#   07/24/2010  v0.1 - first public release
+#   07/24/2010  v0.1   - first public release
 #   07/26/2010  v0.1.1 - added copy/cut/paste
-#   07/31/2010  v0.2 - with kind permission,
-#               added Elias Bachaalany's
-#               script to find opcodes/instructions
+#   07/31/2010  v0.2   - with kind permission,
+#                        added Elias Bachaalany's
+#                        script to find opcodes/instructions
+#   08/25/2010  v0.3  -  added ARM support
+#                        primitive stack/pc tracing for ARM
+#                        Disassembly view export to file
+#                        string reference scanning in disasm view
+#                        add support for comments both in rop view and disasm view in sync
+#                        sync offset number diplay between ropview and disasm
+#                        by Karthik (neox.fx at gmail dot com)
 #
 #   known bugs:
 #   - disassembly view is not always refreshed
@@ -26,6 +33,7 @@
 TODOs:
 - show DEP/ASLR status?
 - implement Auto analysis II?
+- symbol tracing for values?
 - fix popup menu logic/handler
 - clean up ;-)
 """
@@ -35,14 +43,21 @@ from idaapi import simplecustviewer_t
 import struct, os
 
 
-pluginname = "Dr. Gadget"
+pluginname = "Dr.  Gadget " + version
+
+
+isArm = False;
 
 # -----------------------------------------------------------------------
 
 class Gadget:
     
     def __init__ (self):
-        self.controlFlowChangers = ["ret", "retn"]
+        global isArm
+        if (isArm):
+            self.controlFlowChangers = ["PC}"]
+        else:
+            self.controlFlowChangers = ["ret", "retn"]
         self.maxInsCnt = 15
 
 
@@ -55,19 +70,31 @@ class Gadget:
         if funcEA:
             DelFunction (funcEA.startEA)
         # FIXME
-        MakeUnknown (ea, 100, idc.DOUNK_EXPAND)
-        AnalyzeArea (ea, ea+100)
-        MakeCode (ea)
-        return MakeFunction (ea, BADADDR)
+
+        if (isArm):
+            ea = ea & -2  # make sure it is aligned
+            MakeUnknown (ea, self.maxInsCnt, idc.DOUNK_EXPAND)
+            for i in range (ea, ea+self.maxInsCnt):
+                idc.SetReg(i, "T", 1) # set thumb mode
+            AnalyzeArea (ea, ea+self.maxInsCnt)
+            return MakeCode (ea)
+        else:
+            MakeUnknown (ea, 100, idc.DOUNK_EXPAND)
+            AnalyzeArea (ea, ea+100)
+            MakeCode (ea)
+            return MakeFunction (ea, BADADDR)
+
 
 
     def get_disasm (self, ea):
+        if (isArm):
+            ea = ea & -2  # make sure it is aligned
         next = ea
         gadget = []
         endEA = BADADDR
         inscnt = 0
         # FIXME: stop disassembling at f.endEA ?
-        while (next != endEA) or (inscnt < self.maxInsCnt):
+        while (next != endEA) and (inscnt < self.maxInsCnt):
             line = GetDisasm (next)        
             gadget.append (line)
             for mnem in self.controlFlowChangers:
@@ -83,6 +110,9 @@ class PayloadHelper:
 
     def __init__ (self):
         self.items = []
+        self.comment = []
+        self.size = 0
+        self.rawbuf = ""
 
         
     def load_from_file (self, fileName):
@@ -91,8 +121,11 @@ class PayloadHelper:
         f = None
         try:
             f = open (fileName, "rb")
-            buf = f.read ()
-            self.items = self.get_items_from_buf (buf)
+            self.rawbuf = f.read ()
+            self.size = len(self.rawbuf)
+            self.items = self.get_items_from_buf (self.rawbuf)
+            for x in xrange (len(self.items)):
+                self.comment.append ("")
             result = True
         except:
             pass
@@ -146,14 +179,17 @@ class PayloadHelper:
 
     def insert_item (self, n, v):
         self.items.insert (n, [v, 0])
+        self.comment.insert (n, "")
 
 
     def append_item (self, v):
         self.items.insert (len (self.items), [v, 1])
+        self.comment.insert (len (self.comment), "")
 
 
     def remove_item (self, n):
         self.items.pop (n)
+        self.comment.pop (n)
 
         
     def get_value (self, n):
@@ -185,6 +221,57 @@ class PayloadHelper:
             self.set_type (n, typ)
 
 
+    def traceArmPC (self):
+        nl = self.get_number_of_items ()
+        n = 0
+        lasttype1 = 0
+        gap = False
+        while n < nl:
+            r2 = 1
+            ea = self.get_value (n)
+            if SegStart (ea) != BADADDR:
+                typ = 1
+                g = Gadget ()
+                if not g.make_func (ea):
+                    print "%08X: failed" % ea
+                asm = g.get_disasm(ea)
+                if (asm[-1].startswith("POP") and asm[-1].endswith(",PC}")):
+                    l = asm[-1]
+                    rt = (l.split('{'))[1]
+                    rtc = rt.split(',')
+                    if len(rtc) == 2 and rtc[0].find('-') > 0:
+                        rtch = rtc[0].split('-')
+                        t = int(rtch[1][1]) - int(rtch[0][1]) + 1
+                    else:
+                        t = len(rtc)-1
+                    if ((n+t) < nl):
+                        r2 = t
+                    else:
+                        r2 = nl-n-1
+                    for i in xrange (r2):
+                        self.set_type (n+i+1, 0)
+                    r2 = r2 + 1
+                    if lasttype1:
+                        if (n-lasttype1)>15:
+                            print "too much ROP gap before EA, probably not a Gadget: %x" % ea
+                            typ = 0
+                            gap = True
+                        elif gap:
+                            print "new ROP sequence start at EA: %x?" % ea
+                            gap = False
+                            self.set_type(lasttype1, 1)
+                        lasttype1 = n
+                else:
+                    print "unexpected end EA, probably not a Gadget: %x" % ea
+                    typ = 0
+            else:
+                typ = 0
+            self.set_type (n, typ)
+            if typ:
+                lasttype1 = n
+            n = n + r2
+
+
     def reset_type (self):
         for n in xrange (self.get_number_of_items ()):
             self.set_type (n, 0)
@@ -201,9 +288,13 @@ class PayloadHelper:
         else:
             elem = idaapi.COLSTR(elem, idaapi.SCOLOR_DNUM)
         cline += elem
+        comm = ""
         if SegStart (val) != BADADDR:
             # TODO: add DEP/ASLR status?
-            cline += idaapi.COLSTR ("  ; %s" % SegName (val), idaapi.SCOLOR_AUTOCMT)
+            comm = "  ; %s %s" % (SegName (val), self.comment[n])
+        elif self.comment[n] != "":
+            comm = "  ; %s" % self.comment[n]
+        cline += idaapi.COLSTR (comm, idaapi.SCOLOR_AUTOCMT)
         return cline
 
 
@@ -308,8 +399,17 @@ class ropviewer_t (simplecustviewer_t):
             if result == 1:
                 ph.remove_item (self.GetLineNo ())
                 self.refresh ()
-        
-    
+
+
+    def addcomment (self, n):
+        global ph
+        if n < ph.get_number_of_items ():
+            s = AskStr (ph.comment[n], "Enter Comment")
+            if s:
+                ph.comment[n] = s
+            self.refresh ()
+
+               
     def toggle_item (self):
         global ph
         if ph.get_number_of_items ():
@@ -335,6 +435,7 @@ class ropviewer_t (simplecustviewer_t):
             self.AddLine (line)
         self.Refresh ()
 
+
     def OnDblClick (self, shift):
         global ph
         n = self.GetLineNo ()
@@ -353,18 +454,7 @@ class ropviewer_t (simplecustviewer_t):
             n = self.GetLineNo ()
             Jump (ph.get_value (n))
             
-        elif vkey == ord ('O'):
-            self.toggle_item ()
-            
-        elif vkey == ord ('D'):
-            self.delete_item ()
-                
-        elif vkey == ord ("E"):
-            self.edit_item ()
-
-        elif vkey == ord ("I"):
-            self.insert_item ()
-
+        # always put multiple key conditions first
         elif shift == 4 and vkey == ord ("C"):
             self.copy_item ()
 
@@ -379,7 +469,24 @@ class ropviewer_t (simplecustviewer_t):
             if s:
                 find (s, False)
 
+        elif vkey == ord ('O'):
+            self.toggle_item ()
             
+        elif vkey == ord ('D'):
+            self.delete_item ()
+                
+        elif vkey == ord ("E"):
+            self.edit_item ()
+
+        elif vkey == ord ("I"):
+            self.insert_item ()
+
+        elif vkey == ord ("R"):
+            self.refresh ()
+
+        elif vkey == ord ("C"):
+            self.addcomment (self.GetLineNo ())
+
         else:
             return False
         
@@ -403,6 +510,7 @@ class ropviewer_t (simplecustviewer_t):
 
     def OnPopup (self):
         global ph
+        global isArm
         self.ClearPopupMenu ()
 
         # FIXME: ugly
@@ -429,6 +537,8 @@ class ropviewer_t (simplecustviewer_t):
             self.AddPopupMenu ("-")        
             self.menu_autorec = self.AddPopupMenu ("Auto analysis I")
             self.menu_autorec2 = self.AddPopupMenu ("Auto analysis II")
+            if isArm:
+                self.menu_armPCtrace = self.AddPopupMenu ("ARM PC trace")
             self.menu_reset  = self.AddPopupMenu ("Reset")
             self.AddPopupMenu ("-")
             self.menu_disasm  = self.AddPopupMenu ("Show disassembly")
@@ -438,6 +548,7 @@ class ropviewer_t (simplecustviewer_t):
 
     def OnPopupMenu (self, menu_id):
         global ph
+        global isArm
         if menu_id == self.menu_loadfromfile:
             fileName = idc.AskFile (0, "*.*", "Import ROP binary")
             if fileName and ph.load_from_file (fileName):
@@ -460,8 +571,13 @@ class ropviewer_t (simplecustviewer_t):
 
                 
         elif menu_id == self.menu_autorec2:
-            # TODO: add stack-pointer dependent analysis algorithm :D
+            # TODO: add stack-pointer dependent analysis algorithm for x86 :D
             Warning ("Not implemented yet")
+
+
+        elif isArm and menu_id == self.menu_armPCtrace:
+            ph.traceArmPC ()
+            self.refresh ()
 
             
         elif menu_id == self.menu_reset:
@@ -469,10 +585,11 @@ class ropviewer_t (simplecustviewer_t):
                 ph.reset_type ()
                 self.refresh ()
 
-                
+
         elif menu_id == self.menu_disasm:
             try:
                 self.disasm
+                self.disasm.refresh ()
                 self.disasm.Show ()
                 
             except:
@@ -481,6 +598,7 @@ class ropviewer_t (simplecustviewer_t):
                     self.disasm.Show ()
                 else:
                     del self.disasm
+               
                     
         elif menu_id == self.menu_toggle:
             self.toggle_item ()
@@ -523,7 +641,13 @@ class disasmviewer_t (simplecustviewer_t):
 
         self.showData   = True
         self.showRet    = True
-                
+        self.popStrings = False
+        self.strBase    = 0
+
+        self.code = []
+        self.codetext = []
+        self.disasmToRopviewerLine = {}
+
         self.refresh ()
         return True
 
@@ -531,36 +655,125 @@ class disasmviewer_t (simplecustviewer_t):
     def refresh (self):
         global ph
         self.ClearLines ()
-        code = []
-        lastCodePos = 0
-        
+        self.codetext = []
+        self.code = []
+        self.disasmToRopviewerLine = {}
+        lnmapper = 0
         for n in xrange (ph.get_number_of_items ()):
+            self.disasmToRopviewerLine[lnmapper] = n
+            cln = idaapi.COLSTR("%04X " % (n*4), idaapi.SCOLOR_AUTOCMT)
+            comm = ""
+            if ph.comment[n] != "":
+                comm = "  ; %s" % ph.comment[n]
+            c_comm = idaapi.COLSTR (comm, idaapi.SCOLOR_AUTOCMT)
+
             if ph.get_type (n):
                 g = Gadget ()
                 disasm = g.get_disasm (ph.get_value (n))
+                dtog = False
                 for line in disasm:
-                    # FIXME
                     if line.startswith ("ret") and not self.showRet:
                         continue
-                    code.append ("   " + idaapi.COLSTR (line, idaapi.SCOLOR_CODNAME))
+                    if not dtog:  # add comment only once in a multiline instr seq
+                        self.code.append ("  \t " + idaapi.COLSTR (line, idaapi.SCOLOR_CODNAME) + c_comm)
+                        self.codetext.append ("  \t " + line + comm + "\n")
+                        dtog = True
+                    else:
+                        self.code.append ("  \t " + idaapi.COLSTR (line, idaapi.SCOLOR_CODNAME))
+                        self.codetext.append ("  \t " + line + "\n")
+                        lnmapper = lnmapper + 1
+                        self.disasmToRopviewerLine[lnmapper] = n
                     
             elif self.showData:
                 val = ph.get_value (n)
-                code.append (idaapi.COLSTR ("   %08Xh" % val, idaapi.SCOLOR_DNUM))
+                if not self.popStrings:
+                    self.code.append (cln + idaapi.COLSTR ("    %08Xh" % val, idaapi.SCOLOR_DNUM) + c_comm)
+                    self.codetext.append (("%04X    %08Xh%s" % (n*4, val, comm)) + "\n")
+                else:
+                    if (val > self.strBase) and ((val-self.strBase) < ph.size):
+                        off = val - self.strBase
+                        ch1 = ord(ph.rawbuf[off:off+1])
+                        if (ch1 >= 0x20 and ch1 < 0x7f):
+                            eos = ph.rawbuf[off:].find(chr(0))
+                            trailer = ""
+                            if eos > 0:
+                                if (eos > 50):
+                                    eos = 50
+                                    trailer = "..."
+                                strtext = "    --> \"%s\"" % ph.rawbuf[off:off+eos] + trailer
+                            else:
+                                strtext = ""
+                        else:
+                            strtext = ""
+                        self.code.append (cln + idaapi.COLSTR ("    %08Xh" % val, idaapi.SCOLOR_DNUM) + idaapi.COLSTR ("%s" % strtext, idaapi.SCOLOR_STRING) + c_comm)
+                        self.codetext.append (("%04X    %08Xh%s%s" % (n*4, val, strtext, comm)) + "\n")
+                    else:
+                        self.code.append (cln + idaapi.COLSTR ("    %08Xh" % val, idaapi.SCOLOR_DNUM) + c_comm)
+                        self.codetext.append (("%04X    %08Xh%s" % (n*4, val, comm)) + "\n")
+            lnmapper = lnmapper + 1
 
-        for l in code:
+        for l in self.code:
             self.AddLine (l)            
         self.Refresh ()
+
+
+    def save_to_file (self, filename):
+        result = False
+        f = None
+        try:
+            f = open (filename, "w+")
+            for l in self.codetext:
+                f.write (l)
+            result = True
+        except Exception, err:
+            print "[!] An error occurred:", err
+        finally:
+            if f:
+                f.close ()
+        return result
+
+
+    def addcomment (self, n):
+        global ph
+        global rv
+        nlo = self.disasmToRopviewerLine[n]
+        if nlo < ph.get_number_of_items ():
+            s = AskStr (ph.comment[nlo], "Enter Comment")
+            if s:
+                ph.comment[nlo] = s
+            self.refresh ()
+            rv.refresh ()
 
 
     def get_switch_setting (self, var):
         return "\7\t" if var else " \t"
         
 
+    def OnKeydown (self, vkey, shift):
+        global ph
+
+        if vkey == ord ("C"):
+            self.addcomment (self.GetLineNo ())
+            self.Refresh ()         
+
+        elif vkey == ord ("R"):
+            self.refresh ()
+
+        else:
+            return False
+        
+        return True
+
+
     def OnPopup (self):
         self.ClearPopupMenu ()
         self.menu_toggledata = self.AddPopupMenu (self.get_switch_setting (self.showData) + "Show data lines") 
-        self.menu_toggleret = self.AddPopupMenu (self.get_switch_setting (self.showRet) + "Show return instructions")
+        if not isArm:
+            self.menu_toggleret = self.AddPopupMenu (self.get_switch_setting (self.showRet) + "Show return instructions")
+        else:
+            self.menu_toggleret = None
+        self.menu_populatestrings = self.AddPopupMenu (self.get_switch_setting (self.popStrings) + "Show strings referenced")
+        self.menu_savetofile = self.AddPopupMenu ("Save Disasembly")
         return True
 
 
@@ -572,6 +785,17 @@ class disasmviewer_t (simplecustviewer_t):
         elif menu_id == self.menu_toggleret:
             self.showRet = not self.showRet
             self.refresh ()
+
+        elif menu_id == self.menu_populatestrings:
+            self.popStrings = not self.popStrings
+            if self.popStrings:
+                self.strBase = idc.AskLong(self.strBase, "Base displacement to use?")
+            self.refresh ()
+
+        elif menu_id == self.menu_savetofile:
+            fileName = idc.AskFile (1, "*.*", "Export ROP Disasembly view")
+            if fileName and self.save_to_file (fileName):
+                print "disasm saved to %s" % fileName
             
         else:
             return False
@@ -709,6 +933,15 @@ def find(s=None, x=False, asm_where=None):
     else:
         print ret
 
+# -----------------------------------------------------------------------
+def get_processor_name():
+    inf = idaapi.get_inf_structure()
+    eos = inf.procName.find(chr(0))
+    if eos > 0:
+        return inf.procName[:eos]
+    else:
+        return inf.procName
+
 
 # -----------------------------------------------------------------------
 
@@ -731,6 +964,9 @@ class dgplugin_t (idaapi.plugin_t):
     def run (self, arg):
         global ph
         global rv
+        global isArm
+        if (get_processor_name() == 'ARM'):
+            isArm = True
         if not ph:
             ph = PayloadHelper ()
         if not rv:
