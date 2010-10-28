@@ -636,7 +636,7 @@ def ASCII85Decode(data):
   return out
 
 def ASCIIHexDecode(data):
-    return binascii.unhexlify(''.join([c for c in data if c not in ' \t\n\r']).rstrip('>'))
+    return binascii.unhexlify(''.join([c for c in data if c not in ' \t\n\r']).replace('\x00','').rstrip('>'))
 
 def FlateDecode(data):
     # copy from http://code.google.com/p/pdfminerr/source/browse/trunk/pdfminer/pdfminer/pdftypes.py
