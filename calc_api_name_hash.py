@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# -*- coding : utf-8 -*-
+# -*- coding: utf-8 -*-
 
 """
 calc_api_name_hash.py

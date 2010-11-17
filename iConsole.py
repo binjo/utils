@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# -*- coding : utf-8 -*-
+# -*- coding: utf-8 -*-
 
 __author__      = "Binjo"
 __version__     = "0.3"
@@ -420,7 +420,7 @@ class ConsoleUI(VmxUI):
         """
         def vmsnap(argv):
             """
-
+            TODO - fix issue of quoted arguments
             Arguments:
             - `*argv`:
             """

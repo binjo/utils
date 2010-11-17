@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# -*- coding : utf-8 -*-
+# -*- coding: utf-8 -*-
 # OfficeMalHunter.py
 # Binjo @ 2009-06-01 16:35:41
 # Reverse 4 phun...

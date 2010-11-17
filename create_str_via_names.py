@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# -*- coding : utf-8 -*-
+# -*- coding: utf-8 -*-
 
 """
 create_str_via_names.py

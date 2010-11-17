@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# -*- coding : utf-8 -*-
+# -*- coding: utf-8 -*-
 
 """
 analyze_shellcode.py
@@ -136,7 +136,11 @@ def main():
                 else:
                     rm = re.match( 'dword ptr \[[^+].*\+([^h]+)h?\]', opnd )
                     if rm is not None:
-                        xkey = int( rm.group(1), 16 )
+                        # FIXME to resolve issue of "mov dword ptr [edi+eax], 'CUS\'"
+                        try:
+                            xkey = int( rm.group(1), 16 )
+                        except Exception, e:
+                            xkey = 0
 
                 hsh  = GetOperandValue(ea, 1)
                 api, fname, offset = dbh.h2n( "%08X" % hsh )
