@@ -56,7 +56,7 @@ def main():
     # 8B 40 0C                                mov     eax, [eax+0Ch]
     # 8B 70 1C                                mov     esi, [eax+1Ch]
     # AD                                      lodsd
-    ea_mov_fs30 = FindBinary( 0, SEARCH_DOWN, "8B ? 0C 8B ? 1C AD" )
+    ea_mov_fs30 = FindBinary( 0, SEARCH_DOWN, "8B ? 0C 8B ? 1C" )
     if ea_mov_fs30 == BADADDR:
         print "[-] Can't find address of mov exx, fs:30..."
         return -1
