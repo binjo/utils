@@ -22,6 +22,7 @@ FILEZ       = {
     'shell32'   :   'c:/windows/system32/shell32.dll',
     'user32'    :   'c:/windows/system32/user32.dll',
     'urlmon'    :   'c:/windows/system32/urlmon.dll',
+    'ws2_32'    :   'c:/windows/system32/ws2_32.dll',
     }
 
 db = sqlite3.connect( 'api_name_hash.db' )
