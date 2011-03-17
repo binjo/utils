@@ -36,7 +36,7 @@ class HashToName(object):
                                (hsh,))
             row = self._conn.fetchone()
             if row is not None:
-                return row[0].split('-')
+                return str(row[0]).split('-')
 
         return (None, None, None)
 
@@ -64,7 +64,7 @@ def main():
         n, fname, offset = dbh.h2n( "%08X" % h )
         if n is not None:
             print "[+] %08X: %s, offset: %s, %08X <-> %s" % (ea, fname, offset, h, n)
-            rc = AddStrucMember( id, str(n), -1, FF_DWRD, -1, 4 )
+            rc = AddStrucMember( id, str(n), off, FF_DWRD, 0xffffffff, 4 )
             if rc != 0: print '[-] ', rc
         else:
             print '%08X: %08X not found...' % (ea, h)

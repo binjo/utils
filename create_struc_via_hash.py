@@ -36,7 +36,7 @@ class HashToName(object):
                                (hsh,))
             row = self._conn.fetchone()
             if row is not None:
-                return row[0].split('-')
+                return str(row[0]).split('-')
 
         return (None, None, None)
 
@@ -57,15 +57,15 @@ def main():
     h = GetOperandValue(ea, idx)
     i = 0
     while h != -1:
-        i += 1
         if m != 0 and m != -1:
             if i > m: break
         ea += ItemSize(ea)
         n, fname, offset = dbh.h2n( "%08X" % h )
         if n is not None:
             print "[+] %08X: %s, offset: %s, %08X <-> %s" % (ea, fname, offset, h, n)
-            rc = AddStrucMember( id, str(n), -1, FF_DWRD, -1, 4 )
+            rc = AddStrucMember( id, n, i * 4, FF_DWRD, 0xffffffff, 4 )
             if rc != 0: print '[-] ', rc
+            i += 1              # found one api name
         else:
             print '[-] %08X: %08X not found...' % (ea, h)
         h = GetOperandValue(ea, idx)

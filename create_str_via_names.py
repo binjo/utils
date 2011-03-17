@@ -25,7 +25,7 @@ def main():
     fh.close()
 
     for i in xrange(0, len(c)):
-        rc = AddStrucMember( id, c[i].strip('\n'), i*4, FF_DWRD, -1, 4 )
+        rc = AddStrucMember( id, c[i].strip('\n'), i*4, FF_DWRD, 0xffffffff, 4 )
         if rc != 0: print '[-] ', rc
 #-------------------------------------------------------------------------------
 if __name__ == '__main__':
