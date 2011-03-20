@@ -44,7 +44,7 @@ class HashToName(object):
                                (hsh,))
             row = self._conn.fetchone()
             if row is not None:
-                return row[0].split('-')
+                return str(row[0]).split('-')
 
         return (None, None, None)
 
@@ -174,7 +174,7 @@ def main():
     print "[+] Creating struct[%s] from collected hash, count: %d..." % (str_name, len(key_list))
 
     for x in xrange(len(key_list)): # FIXME can't sort() ????
-        rc = AddStrucMember( str_id, str(xstruct[x*4]), -1, FF_DWRD, -1, 4 )
+        rc = AddStrucMember( str_id, str(xstruct[x*4]), x * 4, FF_DWRD, 0xffffffff, 4 )
         if rc !=0: print "[-] ", rc
 
     print "[+] Try to set offset in struct of call..."
