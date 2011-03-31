@@ -48,6 +48,44 @@ class HashToName(object):
 
         return (None, None, None)
 
+def find_eax_from(ea):
+    """try to find mnemonics like 'mov dword ptr [ebp+xxx], eax', start from ea
+
+    Arguments:
+    - `ea`:
+    """
+    eax_ea = BADADDR
+    while True:
+        ea += ItemSize(ea)
+        disasm = GetDisasm(ea)
+        if re.match( r'mov[^,].*?,\s+eax', disasm ) is not None:
+            eax_ea = ea
+            print "[+] found eax after calling api_hash_resolver?! ... 0x%08x" % eax_ea
+            break
+    return eax_ea
+
+def get_xkey_from(ea):
+    """try to resolve xkey from ea
+
+    Arguments:
+    - `ea`:
+    """
+    xkey = -1
+    opnd = GetOpnd(ea, 0)
+    # FIXME what if it's '-'?
+    if opnd.find('+') == -1: # first one
+        xkey = 0
+    else:
+        rm = re.match( '\[[^+].*\+([^h]+)h?\]', opnd )
+        if rm is not None:
+            # FIXME to resolve issue of "mov dword ptr [edi+eax], 'CUS\'"
+            try:
+                xkey = int( rm.group(1), 16 )
+            except Exception, e:
+                xkey = 0
+
+    return xkey
+
 def main():
     """TODO
     """
@@ -129,23 +167,16 @@ def main():
                   GetOpType(ea, 0) == 4) and # 4 == Base + Index + Displacement
                  GetOpType(ea, 1) == 5 ):    # 5 == Immediate
 
-                opnd = GetOpnd(ea, 0)
-                # FIXME what if it's '-'?
-                if opnd.find('+') == -1: # first one
-                    xkey = 0
-                else:
-                    rm = re.match( 'dword ptr \[[^+].*\+([^h]+)h?\]', opnd )
-                    if rm is not None:
-                        # FIXME to resolve issue of "mov dword ptr [edi+eax], 'CUS\'"
-                        try:
-                            xkey = int( rm.group(1), 16 )
-                        except Exception, e:
-                            xkey = 0
+                xkey = get_xkey_from(ea)
 
                 hsh  = GetOperandValue(ea, 1)
                 api, fname, offset = dbh.h2n( "%08X" % hsh )
                 if api is not None:
                     print "[+] %08X: %s, offset: %s, %08X <-> %s" % (ea, fname, offset, hsh, api)
+                    eax_ea = find_eax_from(ea)
+                    if eax_ea != BADADDR:
+                        xkey = get_xkey_from(eax_ea)
+
                     xstruct[xkey] = api
                 else:
                     print "[-] %08X: %08X not found..." % (ea, hsh)
@@ -173,9 +204,18 @@ def main():
 
     print "[+] Creating struct[%s] from collected hash, count: %d..." % (str_name, len(key_list))
 
-    for x in xrange(len(key_list)): # FIXME can't sort() ????
-        rc = AddStrucMember( str_id, str(xstruct[x*4]), x * 4, FF_DWRD, 0xffffffff, 4 )
+    x = 0
+    while True:
+        if x > len(xstruct):
+            break
+        api = "unknown_%d" % x
+        try:
+            api = str(xstruct[x*4])
+        except:
+            pass
+        rc = AddStrucMember( str_id, api, x * 4, FF_DWRD, 0xffffffff, 4 )
         if rc !=0: print "[-] ", rc
+        x += 1
 
     print "[+] Try to set offset in struct of call..."
 
