@@ -5,7 +5,7 @@ __author__ = 'Didier Stevens'
 __version__ = '0.3.7'
 __date__ = '2010/01/09'
 __minimum_python_version__ = (2, 5, 1)
-__maximum_python_version__ = (2, 6, 2)
+__maximum_python_version__ = (2, 7, 1)
 
 """
 Source code put in public domain by Didier Stevens, no Copyright
