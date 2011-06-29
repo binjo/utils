@@ -206,7 +206,7 @@ def main():
 
     x = 0
     while True:
-        if x > len(xstruct):
+        if x > len(xstruct) - 1:
             break
         api = "unknown_%d" % x
         try:
