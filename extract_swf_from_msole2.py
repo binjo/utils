@@ -27,7 +27,7 @@ def main():
         if pos == -1:
             sys.exit( "%s don't embeds swf..." % sys.argv[1] )
 
-    l = s.unpack( "L", ctn[pos-4:pos] )[0]
+    l = s.unpack( "=L", ctn[pos-4:pos] )[0]
     f = open( sys.argv[2], 'wb' )
     f.write( ctn[pos:pos+l] )
     print "done..."
