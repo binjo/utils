@@ -59,15 +59,16 @@ def main():
     while h != -1:
         if m != 0 and m != -1:
             if i > m: break
-        ea += ItemSize(ea)
         n, fname, offset = dbh.h2n( "%08X" % h )
         if n is not None:
             print "[+] %08X: %s, offset: %s, %08X <-> %s" % (ea, fname, offset, h, n)
+            MakeComm( ea, n )
             rc = AddStrucMember( id, n, i * 4, FF_DWRD, 0xffffffff, 4 )
             if rc != 0: print '[-] ', rc
             i += 1              # found one api name
         else:
             print '[-] %08X: %08X not found...' % (ea, h)
+        ea += ItemSize(ea)
         h = GetOperandValue(ea, idx)
 #-------------------------------------------------------------------------------
 if __name__ == '__main__':
