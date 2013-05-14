@@ -16,15 +16,6 @@ import pefile
 import optparse
 import sqlite3
 
-FILEZ       = {
-    'kernel32'  :   'c:/windows/system32/kernel32.dll',
-    'ntdll'     :   'c:/windows/system32/ntdll.dll',
-    'shell32'   :   'c:/windows/system32/shell32.dll',
-    'user32'    :   'c:/windows/system32/user32.dll',
-    'urlmon'    :   'c:/windows/system32/urlmon.dll',
-    'ws2_32'    :   'c:/windows/system32/ws2_32.dll',
-    }
-
 db = sqlite3.connect( 'api_name_hash.db' )
 db.isolation_level = None       # auto commit
 cr = db.cursor()
@@ -69,14 +60,19 @@ def main():
 
     if len(args) != 0:
         opt.print_help()
-        print '  -f is as follows:'
-        for k, v in FILEZ.iteritems():
-            print '    %s -> %s' % ( k, v )
-        exit(-1)
+        return -1
 
-    keyname  = opts.file
+    fname    = opts.file
     searchee = opts.search
     offset   = opts.offset
+
+    fpath    = 'c:/windows/system32/%s.dll' % fname
+
+    if not os.path.isfile( fpath ):
+        print '[-] dll not exist...'
+        return -1
+
+    print 'offset %s, %s' % ( offset, fname )
 
     # for search
     if searchee is not None:
@@ -85,34 +81,21 @@ def main():
         print "%s, %08X" % (cr.fetchone()[0], int( searchee, 16 ))
         return
 
-    # insert table
-    print 'offset %s, %s' % ( offset, keyname )
+    if fpath != '':
+        pe = pefile.PE(fpath)
+        if not pe:
+            print '[-] wrong pe file? ... %s' % fpath # FIXME try/except?
+            return -1
 
-    def filter_rule(x):
-        """
+    for s in pe.DIRECTORY_ENTRY_EXPORT.symbols:
+        v, n = calc_hash( s.name, offset )
+        if v == -1 or not n: continue
+        print '%08X, %s' % ( v, n )
 
-        Arguments:
-        - `x`:
-        """
-        if keyname is not None:
-            return x == keyname
-        else:
-            return True
-
-    files = filter( filter_rule, FILEZ.keys() )
-
-    for f in files:
-        dll = FILEZ.get( f, '' )
-        if dll != '':
-            pe = pefile.PE(dll)
-
-        for s in pe.DIRECTORY_ENTRY_EXPORT.symbols:
-            v, n = calc_hash( s.name, offset )
-            print '%08X, %s' % ( v, n )
-            if v == -1: continue
-            cr.execute("""
-                insert into hashes
-                values ( ?, ? )""", ("%08X" % v, "%s-%s-%s" % (n, keyname, offset)) )
+        # insert table
+        cr.execute("""
+            insert into hashes
+            values ( ?, ? )""", ("%08X" % v, "%s-%s-%s" % (n, fname, offset)) )
 #-------------------------------------------------------------------------------
 if __name__ == '__main__':
     main()
