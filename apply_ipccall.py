@@ -10,8 +10,32 @@ __author__  = 'Binjo'
 __version__ = '0.1'
 __date__    = '2013-03-18 22:30:00'
 
-import os, sys
+import os, sys, re
 import idc, idautils
+
+def register_structs():
+    """register
+    """
+    fpth = os.path.join( os.path.dirname( __file__ ), 'mysandbox.h' )
+    defs = open( fpth, 'rb').read()
+
+    for struct in re.finditer( "(?P<def>^\w+\s+(?P<name>_\S+)\r?\n{[^}]+?};)", defs, re.M ):
+
+        fed = struct.group('def')
+        nme = struct.group('name')
+
+        rc = SetLocalType( -1, fed, 0 )
+        if rc == 0:
+            print '[-] failed to set definition of [%s]' % nme
+            continue            # FIXME return?
+
+        print '> importing type of %s' % nme
+        rc = Til2Idb( -1, nme )
+        if rc == BADNODE:
+            print '[-] failed...'
+            continue            # FIXME return?
+
+    print '[+] register structs done...'
 
 def resolve_AddCrossCall():
     """
@@ -233,6 +257,8 @@ def resolve_pfns():
 def main():
     """TODO
     """
+    register_structs()
+
     print '> resolving ipc key funcs...'
     resolve_GetGlobalIPCMemory()
     resolve_Docall()
