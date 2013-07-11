@@ -22,16 +22,24 @@ def main():
     fh  = open( sys.argv[2], 'wb' )
 
     i = 0
+    b = False
     while i < len(ctn):
 
         x = ord(ctn[i])
-        if ( x >= 0xc0 and x < 0xf2 ):
-            tag = ''.join( [f+k for f, k in
-                            zip( [x for x in hex( ord(ctn[i]) ).replace('0x', '') + hex( ord( ctn[i+1] ) ).replace('0x', '') ],
-                                 ['\x00', '\x00', '\x00', '\x00'] )  ] )
-            fh.write( '_\x00d\x00o\x00s\x00w\x00_\x00' + tag )
-            i += 2
+        if ( x >= 0x90 and x < 0xf2 ):
+            # tag = ''.join( [f+k for f, k in
+            #                 zip( [x for x in hex( ord(ctn[i]) ).replace('0x', '') + hex( ord( ctn[i+1] ) ).replace('0x', '') ],
+            #                      ['\x00', '\x00', '\x00', '\x00'] )  ] )
+            # fh.write( '_\x00d\x00o\x00s\x00w\x00_\x00' + tag )
+            # i += 2
+            b = True
+            tag = hex( ord(ctn[i]) ).replace('0x', '')
+            fh.write( tag )
+            i += 1
         else:
+            if b:
+                fh.write( '_doswf' )
+                b = False
             fh.write( ctn[i] )
             i += 1
 
