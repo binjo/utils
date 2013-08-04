@@ -59,15 +59,16 @@ def main():
     while h != 0:
         if m != 0 and m != -1:
             if ( off + 4 ) / 4 > m: break
-        ea += 4
-        if ea >= MaxEA(): break
         n, fname, offset = dbh.h2n( "%08X" % h )
         if n is not None:
             print "[+] %08X: %s, offset: %s, %08X <-> %s" % (ea, fname, offset, h, n)
+            MakeComm( ea, n )
             rc = AddStrucMember( id, str(n), off, FF_DWRD, 0xffffffff, 4 )
             if rc != 0: print '[-] ', rc
         else:
             print '%08X: %08X not found...' % (ea, h)
+        ea += 4
+        if ea >= MaxEA(): break
         MakeDword(ea)
         h = Dword(ea)
         off += 4
