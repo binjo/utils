@@ -19,7 +19,7 @@ def main():
     print "...as script dumper for as3s.exe..."
 
     if len(sys.argv) != 2:
-        print "usage: %s pid swf" % sys.argv[0]
+        print "usage: %s swf.as" % sys.argv[0]
         return
 
     try:
