@@ -16,15 +16,6 @@ import pefile
 import optparse
 import sqlite3
 
-FILEZ       = {
-    'kernel32'  :   'c:/windows/system32/kernel32.dll',
-    'ntdll'     :   'c:/windows/system32/ntdll.dll',
-    'shell32'   :   'c:/windows/system32/shell32.dll',
-    'user32'    :   'c:/windows/system32/user32.dll',
-    'urlmon'    :   'c:/windows/system32/urlmon.dll',
-    'ws2_32'    :   'c:/windows/system32/ws2_32.dll',
-    }
-
 db = sqlite3.connect( 'api_name_hash.db' )
 db.isolation_level = None       # auto commit
 cr = db.cursor()
@@ -64,55 +55,70 @@ def main():
     opt.add_option( '-s', '--search', help='hash string to search' )
     opt.add_option( '-o', '--offset', help='offset for the calculation' )
     opt.add_option( '-f', '--file',   help='file name' )
+    opt.add_option( '-a', '--add',    help='flag to add salt', action='store_true', default=False )
 
     (opts, args) = opt.parse_args()
 
     if len(args) != 0:
         opt.print_help()
-        print '  -f is as follows:'
-        for k, v in FILEZ.iteritems():
-            print '    %s -> %s' % ( k, v )
-        exit(-1)
+        return -1
 
-    keyname  = opts.file
+    fname    = opts.file
     searchee = opts.search
     offset   = opts.offset
 
     # for search
     if searchee is not None:
+        searchee = int( searchee, 16 )
         cr.execute("select api_name from hashes where api_hash=?",
-                   ("%08X" % int( searchee, 16 ), ))
-        print "%s, %08X" % (cr.fetchone()[0], int( searchee, 16 ))
+                   ("%08X" % searchee, ))
+        row = cr.fetchone()
+        if row:
+            print "%s, %08X" % (row[0], searchee)
+        else:
+            print "[-] failed to find hash of 0x%08x" % searchee
         return
 
-    # insert table
-    print 'offset %s, %s' % ( offset, keyname )
+    fpath    = 'c:/windows/system32/%s.dll' % fname
 
-    def filter_rule(x):
-        """
+    if not os.path.isfile( fpath ):
+        print '[-] dll not exist...'
+        return -1
 
-        Arguments:
-        - `x`:
-        """
-        if keyname is not None:
-            return x == keyname
-        else:
-            return True
+    salt = calc_hash( '\x00'.join( '%s.DLL' % fname.upper() ) + '\x00\x00\x00', offset )[0]
 
-    files = filter( filter_rule, FILEZ.keys() )
+    print 'offset %s, %s' % ( offset, fname )
+    print 'salt = 0x%08x' % salt
 
-    for f in files:
-        dll = FILEZ.get( f, '' )
-        if dll != '':
-            pe = pefile.PE(dll)
+    if fpath != '':
+        pe = pefile.PE(fpath)
+        if not pe:
+            print '[-] wrong pe file? ... %s' % fpath # FIXME try/except?
+            return -1
 
-        for s in pe.DIRECTORY_ENTRY_EXPORT.symbols:
-            v, n = calc_hash( s.name, offset )
-            print '%08X, %s' % ( v, n )
-            if v == -1: continue
-            cr.execute("""
-                insert into hashes
-                values ( ?, ? )""", ("%08X" % v, "%s-%s-%s" % (n, keyname, offset)) )
+    for s in pe.DIRECTORY_ENTRY_EXPORT.symbols:
+
+        apiname = s.name
+        if not apiname: continue
+        if opts.add:
+            apiname += '\x00'
+
+        v, n = calc_hash( apiname, offset )
+
+        if v == -1 or not n: continue
+
+        if opts.add:
+            v += salt
+            v &= 0xffffffff
+            n = n.rstrip('\x00')
+            n += '_salt'
+
+        print '%08X, %s' % ( v, n )
+
+        # insert table
+        cr.execute("""
+            insert into hashes
+            values ( ?, ? )""", ("%08X" % v, "%s-%s-%s" % (n, fname, offset)) )
 #-------------------------------------------------------------------------------
 if __name__ == '__main__':
     main()
